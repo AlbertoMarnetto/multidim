@@ -25,7 +25,7 @@ using std::end;
 /** \fn hasContainedType<T>
 * \param T (typename, as template parameter)
 * \return
-* - \c true if `*begin(t)` is a valid expression for an object `t` of type `T`,
+* - \c true if `*begin(t)` is a valid expression of reference type for an object `t` of type `T`,
 * - \c false otherwise
 * \note  For uniformity it would have been better to make this a struct with `::value`,
 * but SFINAE works better with a function
@@ -41,6 +41,29 @@ constexpr auto _hasContainedType(long) -> decltype(bool()) {
 }
 template <typename T>
 constexpr bool hasContainedType() {return _hasContainedType<T>(0);}
+
+//***************************************************************************
+// hasPointedType
+//***************************************************************************
+/** \fn hasPointedType<T>
+* \param T (typename, as template parameter)
+* \return
+* - \c true if `*t` is a valid expression of reference type for an object `t` of type `T`,
+* - \c false otherwise
+* \note  For uniformity it would have been better to make this a struct with `::value`,
+* but SFINAE works better with a function
+*/
+template <typename T>
+constexpr auto _hasPointedType(int) -> decltype(*std::declval<T>(), bool()) {
+    return std::is_lvalue_reference<decltype(*std::declval<T>())>::value;
+    //return true;
+}
+template <typename T>
+constexpr auto _hasPointedType(long) -> decltype(bool()) {
+    return false;
+}
+template <typename T>
+constexpr bool hasPointedType() {return _hasPointedType<T>(0);}
 
 //***************************************************************************
 // IteratorType
@@ -64,6 +87,18 @@ template <typename T, typename = typename std::enable_if<hasContainedType<T>()>:
 struct ContainedType {
     // Get the iterator type and dereference it
     using type = typename std::remove_reference<decltype(*(std::declval<typename IteratorType<T>::type>()))>::type;
+};
+
+//***************************************************************************
+// PointedType
+//***************************************************************************
+/** \brief Provides the member typedef `type` as the type of `*T`, stripped of the reference
+ * \param T (typename, as template parameter)
+ */
+template <typename T, typename = typename std::enable_if<hasPointedType<T>()>::type>
+struct PointedType {
+    // Get the iterator type and dereference it
+    using type = typename std::remove_reference<decltype(*(std::declval<T>()))>::type;
 };
 
 //***************************************************************************
