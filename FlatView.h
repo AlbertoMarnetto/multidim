@@ -16,18 +16,6 @@ struct Forward {};
 /** \brief Trivial tag class to indicate the seek direction of an iterator */
 struct Backward {};
 
-//// **************************************************************************
-//// Forward declarations (to make the friend declaration work
-//// **************************************************************************
-template <
-    typename ContainerMetrics_,
-    typename TopIterator,
-    bool hasSubIterator = ContainerMetrics_::template isContainer<typename PointedType<TopIterator>::type>()
-> class FlatIterator;
-//template <typename ContainerMetrics_, typename Container>
-//auto makeFlatIteratorBegin(Container& container) -> FlatIterator<Container, ContainerMetrics_>;
-//template <typename ContainerMetrics_, typename Container>
-//auto makeFlatIteratorEnd(Container& container) -> FlatIterator<Container, ContainerMetrics_>;
 
 //***************************************************************************
 // FlatIterator
@@ -35,14 +23,16 @@ template <
 /** \brief An iterator which makes the pointed container appear as a linear array
  * \param Container (typename, as template parameter)
  */
-
-// Version FlatIterator pointing to a subcontainer
-// (and hence having a subIterator)
 template <
     typename ContainerMetrics_,
     typename TopIterator,
-    bool hasSubIterator
-> class FlatIterator
+    bool hasSubIterator = ContainerMetrics_::template isContainer<typename PointedType<TopIterator>::type>()
+> class FlatIterator;
+
+// Version pointing to a subcontainer
+// (and hence having a subIterator)
+template <typename ContainerMetrics_, typename TopIterator>
+class FlatIterator<ContainerMetrics_, TopIterator, true>
 :   public boost::iterator_facade<
         FlatIterator<ContainerMetrics_, TopIterator, true>, /*Derived=*/
         typename ContainerMetrics_::template ScalarType<typename PointedType<TopIterator>::type>::type, /*Value=*/
@@ -57,11 +47,11 @@ public:
     FlatIterator(const FlatIterator&) = default;
     /**< \brief Copy constructor. Note that FlatIterator is TriviallyCopyable */
 
-    static FlatIterator makeBegin(TopIterator myBegin, TopIterator myEnd) {
-        return FlatIterator<ContainerMetrics_, TopIterator>{myBegin, myEnd, Forward{}};
+    static FlatIterator makeBegin(TopIterator first, TopIterator last) {
+        return FlatIterator<ContainerMetrics_, TopIterator>{first, last, Forward{}};
     }
-    static FlatIterator makeEnd(TopIterator myBegin, TopIterator myEnd) {
-        return FlatIterator<ContainerMetrics_, TopIterator>{myBegin, myEnd, Backward{}};
+    static FlatIterator makeEnd(TopIterator first, TopIterator last) {
+        return FlatIterator<ContainerMetrics_, TopIterator>{first, last, Backward{}};
     }
 
 private: // funcs
@@ -71,38 +61,76 @@ private: // funcs
 
     using ChildIterator = typename IteratorType<typename PointedType<TopIterator>::type>::type;
 
-    FlatIterator(TopIterator myBegin, TopIterator myEnd, Forward)
+    FlatIterator(TopIterator first, TopIterator last, Forward)
         : valid_{false}
-        , begin_{myBegin}
-        , curr_{myBegin}
-        , end_{myEnd}
+        , begin_{first}
+        , curr_{first}
+        , end_{last}
     {
-        seekForward();
+        increment();
     }
-    FlatIterator(TopIterator myBegin, TopIterator myEnd, Backward)
+    FlatIterator(TopIterator first, TopIterator last, Backward)
         : valid_{false}
-        , begin_{myBegin}
-        , curr_{myEnd}
-        , end_{myEnd}
+        , begin_{first}
+        , curr_{last}
+        , end_{last}
     {
     }
+
+    // Invariant: the iterator can only be in one of these states:
+    // (1) (valid_ == false && curr_ == begin_) :
+    //     represents the element "one before the first".
+    // (2) (valid_ == true && curr_ >= begin_ && curr_ < end_ && subIterator_.valid_ == true) :
+    //     represents a valid scalar element
+    // (3) (valid_ == false && curr_ == end_) :
+    //     represents the element "one past the end"
+    // If (begin_ == end_) then states (1) and (3) collapse, but this does not pose a problem
 
     // Note the asimmetry between increment and decrement:
     // it is provoked by the asimmetry between begin(),
     // which points to a potentially valid element,
     // and end(), which does not
     void increment() {
-        if (curr_ == end_) {valid_ = false; return;}
-        ++subIterator_;
-        if (subIterator_.valid_) return;
-        ++curr_;
-        seekForward();
+        if (valid_) {
+            // subiterator_ is already in a valid state,
+            // move it forward
+            ++subIterator_;
+            if (subIterator_.valid_) return;
+
+            // no more scalar elements at *curr_
+            // move ourselves forward
+            ++curr_;
+        }
+
+        while(1) {
+            // just updated curr_, try to build
+            // a valid subiterator at this location
+            if (curr_ == end_) {valid_ = false; return;}
+            subIterator_ = FlatIterator<ContainerMetrics_, ChildIterator>{begin(*curr_), end(*curr_), Forward{}};
+            if (subIterator_.valid_ == true) {valid_ = true; return;}
+            ++curr_;
+        }
     }
+
     void decrement() {
-        --subIterator_;
-        if (subIterator_.valid_) return;
-        seekBackward();
+        if (valid_) {
+            // subiterator_ is already in a valid state,
+            // move it backward
+            --subIterator_;
+            if (subIterator_.valid_) return;
+        }
+
+        // no more scalar elements at *curr,
+        // move ourselves backward
+        while(1) {
+            if (curr_ == begin_) {valid_ = false; return;}
+            --curr_;
+            subIterator_ = FlatIterator<ContainerMetrics_, ChildIterator>{begin(*curr_), end(*curr_), Backward{}};
+            --subIterator_;
+            if (subIterator_.valid_ == true) {valid_ = true; return;}
+        }
     }
+
     auto dereference() const -> typename ContainerMetrics_::template ScalarType<typename PointedType<TopIterator>::type>::type& {
         if (!valid_) throw std::runtime_error("FlatIterator: access out of bounds");
         return *subIterator_;
@@ -115,21 +143,7 @@ private: // funcs
             && (!valid_ || (subIterator_ == other.subIterator_));
     }
 
-    void seekForward() {
-        while(1) {
-            if (curr_ == end_) {valid_ = false; return;}
-            subIterator_ = FlatIterator<ContainerMetrics_, ChildIterator>{begin(*curr_), end(*curr_), Forward{}};
-            if (subIterator_.valid_ == true) {valid_ = true; return;}
-            ++curr_;
-        }
-    }
     void seekBackward() {
-        while(1) {
-            if (curr_ == begin_) {valid_ = false; return;}
-            --curr_;
-            subIterator_ = FlatIterator<ContainerMetrics_, ChildIterator>{begin(*curr_), end(*curr_), Backward{}};
-            if (subIterator_.valid_ == true) {valid_ = true; return;}
-        }
     }
 
 private: // members
@@ -159,41 +173,42 @@ public:
     FlatIterator(const FlatIterator&) = default;
     /**< \brief Copy constructor. Note that FlatIterator is TriviallyCopyable */
 
-    static FlatIterator makeBegin(TopIterator myBegin, TopIterator myEnd) {
-        return FlatIterator<ContainerMetrics_, TopIterator>{myBegin, myEnd, Forward{}};
+    static FlatIterator makeBegin(TopIterator first, TopIterator last) {
+        return FlatIterator<ContainerMetrics_, TopIterator>{first, last, Forward{}};
     }
-    static FlatIterator makeEnd(TopIterator myBegin, TopIterator myEnd) {
-        return FlatIterator<ContainerMetrics_, TopIterator>{myBegin, myEnd, Backward{}};
+    static FlatIterator makeEnd(TopIterator first, TopIterator last) {
+        return FlatIterator<ContainerMetrics_, TopIterator>{first, last, Backward{}};
     }
 
 private: // funcs
     friend class boost::iterator_core_access;
     template <typename, typename, bool> friend class FlatIterator;
 
-    FlatIterator(TopIterator myBegin, TopIterator myEnd, Forward)
+    FlatIterator(TopIterator first, TopIterator last, Forward)
         : valid_{false}
-        , begin_{myBegin}
-        , curr_{myBegin}
-        , end_{myEnd}
+        , begin_{first}
+        , curr_{first}
+        , end_{last}
     {
-        seekForward();
+        increment();
     }
-    FlatIterator(TopIterator myBegin, TopIterator myEnd, Backward)
+    FlatIterator(TopIterator first, TopIterator last, Backward)
         : valid_{false}
-        , begin_{myBegin}
-        , curr_{myEnd}
-        , end_{myEnd}
+        , begin_{first}
+        , curr_{last}
+        , end_{last}
     {
-        seekBackward();
     }
 
     void increment() {
-        if (curr_ == end_) {valid_ = false; return;}
-        ++curr_;
-        seekForward();
+        if (valid_) ++curr_;
+        valid_ = !(curr_ == end_);
     }
+
     void decrement() {
-        seekBackward();
+        if (curr_ == begin_) {valid_ = false; return;}
+        --curr_;
+        valid_ = true;
     }
 
     auto dereference() const -> typename ContainerMetrics_::template ScalarType<typename PointedType<TopIterator>::type>::type& {
@@ -205,16 +220,6 @@ private: // funcs
 
     bool equal(const FlatIterator& other) const {
         return (begin_ == other.begin_) && (curr_ == other.curr_) && (end_ == other.end_);
-    }
-
-    void seekForward() {
-        valid_ = !(curr_ == end_);
-    }
-
-    void seekBackward() {
-        if (curr_ == begin_) {valid_ = false; return;}
-        --curr_;
-        valid_ = true;
     }
 
 private: // members
@@ -229,28 +234,43 @@ private: // members
 //***************************************************************************
 /** \brief Factory method to build a FlatIterator pointing at the first scalar element of a container.
  * \param ContainerMetrics (typename, as template parameter) : an instantiation of ContainerMetrics template,
- *        used to detect what the scalar type of the container is
+ *        used to determine what the scalar type of the container is
  * \param container : the container on which the iterator will run
  */
-
-// Note that here the order of the template arguments is inverted.
-// This is because typename Container will be deduced, while ContainerMetrics
-// must be specified by the caller
 template <typename ContainerMetrics_, typename Container>
-auto makeFlatIteratorBegin(Container& container) -> FlatIterator<ContainerMetrics_, typename IteratorType<Container>::type>  {
-    return FlatIterator<ContainerMetrics_, typename IteratorType<Container>::type>::makeBegin(begin(container), end(container));
+auto makeFlatIteratorBegin(Container& container) -> FlatIterator<ContainerMetrics_, decltype(begin(container))>  {
+    return FlatIterator<ContainerMetrics_, decltype(begin(container))>::makeBegin(begin(container), end(container));
 }
+/** \brief Factory method to build a FlatIterator pointing at the first scalar element of a range.
+ * \param ContainerMetrics (typename, as template parameter) : an instantiation of ContainerMetrics template,
+ *        used to determine what the scalar type of the container is
+ * \param first, last : iterators delimiting the range
+ */
+template <typename ContainerMetrics_, typename T>
+auto makeFlatIteratorBegin(T first, T last) -> FlatIterator<ContainerMetrics_, T>  {
+    return FlatIterator<ContainerMetrics_, T>::makeBegin(first, last);
+}
+
 //***************************************************************************
 // makeFlatIteratorEnd
 //***************************************************************************
 /** \brief Factory method to build a FlatIterator pointing at the one-past-the-last element of a container.
  * \param ContainerMetrics (typename, as template parameter) : an instantiation of ContainerMetrics template,
- *        used to detect what the scalar type of the container is
+ *        used to determine what the scalar type of the container is
  * \param container : the container on which the iterator will run
  */
 template <typename ContainerMetrics_, typename Container>
-auto makeFlatIteratorEnd(Container& container) -> FlatIterator<ContainerMetrics_, typename IteratorType<Container>::type> {
-    return FlatIterator<ContainerMetrics_, typename IteratorType<Container>::type>::makeEnd(begin(container), end(container));
+auto makeFlatIteratorEnd(Container& container) -> FlatIterator<ContainerMetrics_, decltype(begin(container))> {
+    return FlatIterator<ContainerMetrics_, decltype(begin(container))>::makeEnd(begin(container), end(container));
+}
+/** \brief Factory method to build a FlatIterator pointing at the one-past-the-last element of a container.
+ * \param ContainerMetrics (typename, as template parameter) : an instantiation of ContainerMetrics template,
+ *        used to determine what the scalar type of the container is
+ * \param first, last : iterators delimiting the range
+ */
+template <typename ContainerMetrics_, typename T>
+auto makeFlatIteratorEnd(T first, T last) -> FlatIterator<ContainerMetrics_, T>  {
+    return FlatIterator<ContainerMetrics_, T>::makeEnd(first, last);
 }
 
 #if 0
