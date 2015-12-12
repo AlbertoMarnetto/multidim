@@ -24,18 +24,18 @@ struct Backward {};
  * \param Container (typename, as template parameter)
  */
 template <
-    typename ContainerMetrics_,
+    template<typename> class IsCustomScalar,
     typename TopIterator,
-    bool hasSubIterator = ContainerMetrics_::template isContainer<typename PointedType<TopIterator>::type>()
+    bool hasSubIterator = ContainerMetrics<IsCustomScalar>::template isContainer<typename PointedType<TopIterator>::type>()
 > class FlatIterator;
 
 // Version pointing to a subcontainer
 // (and hence having a subIterator)
-template <typename ContainerMetrics_, typename TopIterator>
-class FlatIterator<ContainerMetrics_, TopIterator, true>
+template <template<typename> class IsCustomScalar, typename TopIterator>
+class FlatIterator<IsCustomScalar, TopIterator, true>
 :   public boost::iterator_facade<
-        FlatIterator<ContainerMetrics_, TopIterator, true>, /*Derived=*/
-        typename ContainerMetrics_::template ScalarType<typename PointedType<TopIterator>::type>::type, /*Value=*/
+        FlatIterator<IsCustomScalar, TopIterator, true>, /*Derived=*/
+        typename ContainerMetrics<IsCustomScalar>::template ScalarType<typename PointedType<TopIterator>::type>::type, /*Value=*/
         boost::bidirectional_traversal_tag /*CategoryOrTraversal=*/
         /*Reference = Value&, Difference = ptrdiff_t*/
     >
@@ -48,16 +48,16 @@ public:
     /**< \brief Copy constructor. Note that FlatIterator is TriviallyCopyable */
 
     static FlatIterator makeBegin(TopIterator first, TopIterator last) {
-        return FlatIterator<ContainerMetrics_, TopIterator>{first, last, Forward{}};
+        return FlatIterator<IsCustomScalar, TopIterator>{first, last, Forward{}};
     }
     static FlatIterator makeEnd(TopIterator first, TopIterator last) {
-        return FlatIterator<ContainerMetrics_, TopIterator>{first, last, Backward{}};
+        return FlatIterator<IsCustomScalar, TopIterator>{first, last, Backward{}};
     }
+
+    bool valid() const {return valid_;}
 
 private: // funcs
     friend class boost::iterator_core_access;
-
-    template <typename, typename, bool> friend class FlatIterator;
 
     using ChildIterator = typename IteratorType<typename PointedType<TopIterator>::type>::type;
 
@@ -95,7 +95,7 @@ private: // funcs
             // subiterator_ is already in a valid state,
             // move it forward
             ++subIterator_;
-            if (subIterator_.valid_) return;
+            if (subIterator_.valid()) return;
 
             // no more scalar elements at *curr_
             // move ourselves forward
@@ -106,8 +106,8 @@ private: // funcs
             // just updated curr_, try to build
             // a valid subiterator at this location
             if (curr_ == end_) {valid_ = false; return;}
-            subIterator_ = FlatIterator<ContainerMetrics_, ChildIterator>{begin(*curr_), end(*curr_), Forward{}};
-            if (subIterator_.valid_ == true) {valid_ = true; return;}
+            subIterator_ = FlatIterator<IsCustomScalar, ChildIterator>::makeBegin(begin(*curr_), end(*curr_));
+            if (subIterator_.valid() == true) {valid_ = true; return;}
             ++curr_;
         }
     }
@@ -117,7 +117,7 @@ private: // funcs
             // subiterator_ is already in a valid state,
             // move it backward
             --subIterator_;
-            if (subIterator_.valid_) return;
+            if (subIterator_.valid()) return;
         }
 
         // no more scalar elements at *curr,
@@ -125,13 +125,13 @@ private: // funcs
         while(1) {
             if (curr_ == begin_) {valid_ = false; return;}
             --curr_;
-            subIterator_ = FlatIterator<ContainerMetrics_, ChildIterator>{begin(*curr_), end(*curr_), Backward{}};
+            subIterator_ = FlatIterator<IsCustomScalar, ChildIterator>::makeEnd(begin(*curr_), end(*curr_));
             --subIterator_;
-            if (subIterator_.valid_ == true) {valid_ = true; return;}
+            if (subIterator_.valid() == true) {valid_ = true; return;}
         }
     }
 
-    auto dereference() const -> typename ContainerMetrics_::template ScalarType<typename PointedType<TopIterator>::type>::type& {
+    auto dereference() const -> typename ContainerMetrics<IsCustomScalar>::template ScalarType<typename PointedType<TopIterator>::type>::type& {
         if (!valid_) throw std::runtime_error("FlatIterator: access out of bounds");
         return *subIterator_;
     }
@@ -151,17 +151,17 @@ private: // members
     TopIterator begin_;
     TopIterator curr_;
     TopIterator end_;
-    FlatIterator<ContainerMetrics_, ChildIterator> subIterator_;
+    FlatIterator<IsCustomScalar, ChildIterator> subIterator_;
 };
 
 // **************************************************************************
 
 // Version for FlatIterator pointing to a scalar type
-template <typename ContainerMetrics_, typename TopIterator>
-class FlatIterator<ContainerMetrics_, TopIterator, false>
+template <template<typename> class IsCustomScalar, typename TopIterator>
+class FlatIterator<IsCustomScalar, TopIterator, false>
 :   public boost::iterator_facade<
-        FlatIterator<ContainerMetrics_, TopIterator, false>, /*Derived=*/
-        typename ContainerMetrics_::template ScalarType<typename PointedType<TopIterator>::type>::type, /*Value=*/
+        FlatIterator<IsCustomScalar, TopIterator, false>, /*Derived=*/
+        typename ContainerMetrics<IsCustomScalar>::template ScalarType<typename PointedType<TopIterator>::type>::type, /*Value=*/
         boost::bidirectional_traversal_tag /*CategoryOrTraversal=*/
         /*Reference = Value&, Difference = ptrdiff_t*/
     >
@@ -174,15 +174,16 @@ public:
     /**< \brief Copy constructor. Note that FlatIterator is TriviallyCopyable */
 
     static FlatIterator makeBegin(TopIterator first, TopIterator last) {
-        return FlatIterator<ContainerMetrics_, TopIterator>{first, last, Forward{}};
+        return FlatIterator<IsCustomScalar, TopIterator>{first, last, Forward{}};
     }
     static FlatIterator makeEnd(TopIterator first, TopIterator last) {
-        return FlatIterator<ContainerMetrics_, TopIterator>{first, last, Backward{}};
+        return FlatIterator<IsCustomScalar, TopIterator>{first, last, Backward{}};
     }
+
+    bool valid() const {return valid_;}
 
 private: // funcs
     friend class boost::iterator_core_access;
-    template <typename, typename, bool> friend class FlatIterator;
 
     FlatIterator(TopIterator first, TopIterator last, Forward)
         : valid_{false}
@@ -211,7 +212,7 @@ private: // funcs
         valid_ = true;
     }
 
-    auto dereference() const -> typename ContainerMetrics_::template ScalarType<typename PointedType<TopIterator>::type>::type& {
+    auto dereference() const -> typename ContainerMetrics<IsCustomScalar>::template ScalarType<typename PointedType<TopIterator>::type>::type& {
         if (!valid_) throw std::runtime_error("FlatIterator: access out of bounds");
         return *curr_;
         // This is the key difference: being the iterator at the bottom
@@ -237,18 +238,18 @@ private: // members
  *        used to determine what the scalar type of the container is
  * \param container : the container on which the iterator will run
  */
-template <typename ContainerMetrics_, typename Container>
-auto makeFlatIteratorBegin(Container& container) -> FlatIterator<ContainerMetrics_, decltype(begin(container))>  {
-    return FlatIterator<ContainerMetrics_, decltype(begin(container))>::makeBegin(begin(container), end(container));
+template <template<typename> class IsCustomScalar, typename Container>
+auto makeFlatIteratorBegin(Container& container) -> FlatIterator<IsCustomScalar, decltype(begin(container))>  {
+    return FlatIterator<IsCustomScalar, decltype(begin(container))>::makeBegin(begin(container), end(container));
 }
 /** \brief Factory method to build a FlatIterator pointing at the first scalar element of a range.
  * \param ContainerMetrics (typename, as template parameter) : an instantiation of ContainerMetrics template,
  *        used to determine what the scalar type of the container is
  * \param first, last : iterators delimiting the range
  */
-template <typename ContainerMetrics_, typename T>
-auto makeFlatIteratorBegin(T first, T last) -> FlatIterator<ContainerMetrics_, T>  {
-    return FlatIterator<ContainerMetrics_, T>::makeBegin(first, last);
+template <template<typename> class IsCustomScalar, typename T>
+auto makeFlatIteratorBegin(T first, T last) -> FlatIterator<IsCustomScalar, T>  {
+    return FlatIterator<IsCustomScalar, T>::makeBegin(first, last);
 }
 
 //***************************************************************************
@@ -259,18 +260,18 @@ auto makeFlatIteratorBegin(T first, T last) -> FlatIterator<ContainerMetrics_, T
  *        used to determine what the scalar type of the container is
  * \param container : the container on which the iterator will run
  */
-template <typename ContainerMetrics_, typename Container>
-auto makeFlatIteratorEnd(Container& container) -> FlatIterator<ContainerMetrics_, decltype(begin(container))> {
-    return FlatIterator<ContainerMetrics_, decltype(begin(container))>::makeEnd(begin(container), end(container));
+template <template<typename> class IsCustomScalar, typename Container>
+auto makeFlatIteratorEnd(Container& container) -> FlatIterator<IsCustomScalar, decltype(begin(container))> {
+    return FlatIterator<IsCustomScalar, decltype(begin(container))>::makeEnd(begin(container), end(container));
 }
 /** \brief Factory method to build a FlatIterator pointing at the one-past-the-last element of a container.
  * \param ContainerMetrics (typename, as template parameter) : an instantiation of ContainerMetrics template,
  *        used to determine what the scalar type of the container is
  * \param first, last : iterators delimiting the range
  */
-template <typename ContainerMetrics_, typename T>
-auto makeFlatIteratorEnd(T first, T last) -> FlatIterator<ContainerMetrics_, T>  {
-    return FlatIterator<ContainerMetrics_, T>::makeEnd(first, last);
+template <template<typename> class IsCustomScalar, typename T>
+auto makeFlatIteratorEnd(T first, T last) -> FlatIterator<IsCustomScalar, T>  {
+    return FlatIterator<IsCustomScalar, T>::makeEnd(first, last);
 }
 
 #if 0

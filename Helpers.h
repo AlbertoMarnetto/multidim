@@ -23,12 +23,15 @@ using std::end;
 // hasContainedType
 //***************************************************************************
 /** \fn hasContainedType<T>
-* \param T (typename, as template parameter)
-* \return
-* - \c true if `*begin(t)` is a valid expression of reference type for an object `t` of type `T`,
-* - \c false otherwise
-* \note  For uniformity it would have been better to make this a struct with `::value`,
-* but SFINAE works better with a function
+ * \param T (typename, as template parameter)
+ * \return
+ * - \c true if `*begin(t)` is a valid expression of reference type for an object `t` of type `T`,
+ * - \c false otherwise
+ * \note For uniformity it would have been better to make this a struct with `::value`,
+ * but SFINAE is simpler with a function
+ * \note Will not work with `std::vector<bool>`, as it is not a container.
+ * See http://www.gotw.ca/publications/mill09.htm, in particular the quote
+ “a container<T>::reference must be a true reference (T&), never a proxy”
 */
 template <typename T>
 constexpr auto _hasContainedType(int) -> decltype(*begin(std::declval<typename std::add_lvalue_reference<T>::type>()), bool()) {
@@ -63,7 +66,7 @@ struct IteratorType {
 template <typename T, typename = typename std::enable_if<hasContainedType<T>()>::type>
 struct ContainedType {
     // Get the iterator type and dereference it
-    using type = typename std::remove_reference<decltype(*(std::declval<typename IteratorType<T>::type>()))>::type;
+    using type = decltype(*(std::declval<typename IteratorType<T>::type>()));
 };
 
 //***************************************************************************
@@ -99,7 +102,7 @@ constexpr bool hasPointedType() {return _hasPointedType<T>(0);}
 template <typename T, typename = typename std::enable_if<hasPointedType<T>()>::type>
 struct PointedType {
     // Get the iterator type and dereference it
-    using type = typename std::remove_reference<decltype(*(std::declval<T>()))>::type;
+    using type = decltype(*(std::declval<T>()));
 };
 
 //***************************************************************************
