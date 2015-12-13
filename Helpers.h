@@ -118,6 +118,36 @@ inline bool isFirstElementOf(const T& element, const Container& container) {
     return &element == &*begin(container);
 }
 
+// **************************************************************************
+// size
+// **************************************************************************
+/** \fn auto size(const Container& c) -> size_t
+ * \brief Returns the size of the container `c`
+ * \param c A container
+ */
+template<typename Container>
+static auto size(const Container& c, long) -> decltype(begin(c), end(c), size_t()) {
+    return std::distance(begin(c), end(c));
+}
+template<typename Container>
+static auto size(const Container& c, int) -> decltype(c.size(), size_t()) {
+    return c.size();
+}
+
+// Entry point
+template<typename Container>
+static auto size(const Container& c) -> size_t {
+    return size(c, 0);
+}
+
+// **************************************************************************
+// Trivial tag classes
+// **************************************************************************
+/** \brief Trivial tag class to indicate the seek direction of an iterator */
+struct Forward {};
+/** \brief Trivial tag class to indicate the seek direction of an iterator */
+struct Backward {};
+
 /** @} basic_templates */
 
 } // namespace multidim

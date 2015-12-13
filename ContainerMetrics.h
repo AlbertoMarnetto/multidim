@@ -44,24 +44,40 @@ template <template<typename> class IsCustomScalar> struct ContainerMetrics {
     }
 
     // **************************************************************************
-    // ScalarType
+    // ScalarReferenceType
     // **************************************************************************
-    /** \brief Provides the member typedef `type`
-     * as the scalar type stored in the container,
-     * e.g. vector<set<int>> --> int
+    /** \brief Provides the member typedef `type` as the reference type
+     * of the scalar value in a (possibly nested) container,
+     * e.g. vector<set<int>> --> int&
      * \param T (typename, as template parameter)
      */
     template <typename T, bool = ContainerMetrics::isContainer<T>()>
-    struct ScalarType {
+    struct ScalarReferenceType {
         // If T is not a container, it is the scalar type we looked for
-        using type = T;
+        using type = typename std::add_lvalue_reference<T>::type;
     };
 
     template <typename T>
-    struct ScalarType<T, true> {
-        // If T is a container, call ScalarType on the contained type
-        using type = typename ScalarType<typename ContainedType<T>::type>::type;
+    struct ScalarReferenceType<T, true> {
+        // If T is a container, call ScalarReferenceType on the contained type
+        using type = typename ScalarReferenceType<typename ContainedType<T>::type>::type;
     };
+
+    // **************************************************************************
+    // ScalarValueType
+    // **************************************************************************
+    /** \brief Provides the member typedef `type` as the value type
+     * of the scalar value in a (possibly nested) container,
+     * e.g. vector<set<int>> --> int
+     * \param T (typename, as template parameter)
+     */
+
+    template <typename T>
+    struct ScalarValueType {
+        // If T is a container, call ScalarReferenceType on the contained type
+        using type = typename std::remove_reference<typename ScalarReferenceType<T>::type>::type;
+    };
+
 
 
     // **************************************************************************
@@ -69,7 +85,7 @@ template <template<typename> class IsCustomScalar> struct ContainerMetrics {
     // **************************************************************************
     /** \fn constexpr size_t dimensionality()
      * \brief Returns the dimensionality of the container,
-     * i.e. how many times we must dereference to get to its ScalarType
+     * i.e. how many times we must dereference to get to its ScalarReferenceType
      * \param T (typename, as template parameter)
      * \note a variant accepting a concrete instance of type `T` is provided for easier use at runtime
      */
@@ -93,28 +109,6 @@ template <template<typename> class IsCustomScalar> struct ContainerMetrics {
         return Dimensionality<const T&>::value;
     }
 
-
-    // **************************************************************************
-    // size
-    // **************************************************************************
-    /** \fn auto size(const Container& c) -> size_t
-     * \brief Returns the size of the container `c`
-     * \param c A container
-     */
-    template<typename Container>
-    static auto size(const Container& c, long) -> decltype(begin(c), end(c), size_t()) {
-        return std::distance(begin(c), end(c));
-    }
-    template<typename Container>
-    static auto size(const Container& c, int) -> decltype(c.size(), size_t()) {
-        return c.size();
-    }
-
-    // Entry point
-    template<typename Container>
-    static auto size(const Container& c) -> size_t {
-        return size(c, 0);
-    }
 
     // **************************************************************************
     // computeContainerGeometry

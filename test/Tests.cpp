@@ -43,9 +43,9 @@ TEST_CASE( "ContainerHelpers", "[multidim]" ) {
         CHECK(TEST_CONTAINED_TYPE(table, std::list<std::string>&));
         CHECK(TEST_CONTAINED_TYPE(riddled, std::vector<std::vector<float>>&));
 
-#define TEST_SCALAR_TYPE(x, y) (std::is_same<Metrics1::ScalarType<decltype(x)>::type, y>::value)
-#define TEST_SCALAR_TYPE_CUSTOM(x, y) (std::is_same<Metrics2::ScalarType<decltype(x)>::type, y>::value)
-        CHECK(TEST_SCALAR_TYPE(scalar, int));
+#define TEST_SCALAR_TYPE(x, y) (std::is_same<Metrics1::ScalarReferenceType<decltype(x)>::type, y>::value)
+#define TEST_SCALAR_TYPE_CUSTOM(x, y) (std::is_same<Metrics2::ScalarReferenceType<decltype(x)>::type, y>::value)
+        CHECK(TEST_SCALAR_TYPE(scalar, int&));
         CHECK(TEST_SCALAR_TYPE(vectorInt, int&));
         CHECK(TEST_SCALAR_TYPE(cArray, int&));
         CHECK(TEST_SCALAR_TYPE(refCArray, const int&));
@@ -112,17 +112,18 @@ TEST_CASE( "ContainerHelpers", "[multidim]" ) {
 template <typename Scalar, template<typename> class IsCustomScalar, typename Container>
 auto threeWayFlatten(const Container& container) -> vector<Scalar> {
     vector<Scalar> result;
-    auto it = md::makeFlatIteratorBegin<IsCustomScalar>(container);
-    while (it != md::makeFlatIteratorEnd<IsCustomScalar>(container)) {result.push_back(*it++);}
-    while (it != md::makeFlatIteratorBegin<IsCustomScalar>(container)) {result.push_back(*--it);}
-    while (it != md::makeFlatIteratorEnd<IsCustomScalar>(container)) {result.push_back(*it++);}
+    auto fv = md::makeFlatView<IsCustomScalar>(container);
+    result.insert(result.end(), fv.begin(), fv.end());
+    result.insert(result.end(), fv.rbegin(), fv.rend());
+    result.insert(result.end(), fv.begin(), fv.end());
     return result;
 }
 
 template <template<typename> class IsCustomScalar, typename Container>
 auto alteredCopy(const Container& original) -> Container {
     Container result = original;
-    auto it = md::makeFlatIteratorBegin<IsCustomScalar>(result);
+    auto fv = md::makeFlatView<IsCustomScalar>(result);
+    auto it = fv.begin();
     ++++it;
     *it = (*it) + (*it);
     return result;
@@ -149,10 +150,10 @@ TEST_CASE( "Views", "[multidim]" ) {
             auto first = begin(uriahFuller);
             auto last = begin(uriahFuller) + 3;
 
-            auto it = md::makeFlatIteratorBegin<md::NoCustomScalars>(first, last);
-            while (it != md::makeFlatIteratorEnd<md::NoCustomScalars>(first, last)) {flattened.push_back(*it++);}
-            while (it != md::makeFlatIteratorBegin<md::NoCustomScalars>(first, last)) {flattened.push_back(*--it);}
-            while (it != md::makeFlatIteratorEnd<md::NoCustomScalars>(first, last)) {flattened.push_back(*it++);}
+            auto fv = md::makeFlatView<md::NoCustomScalars>(first, last);
+            flattened.insert(flattened.end(), fv.begin(), fv.end());
+            flattened.insert(flattened.end(), fv.rbegin(), fv.rend());
+            flattened.insert(flattened.end(), fv.begin(), fv.end());
             CHECK(flattened == (vector<int> {1,2,3,4,4,3,2,1,1,2,3,4,}));
         }
         {
