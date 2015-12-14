@@ -3,8 +3,8 @@
 The `multidim` library is a small C++11 library, helping to deal with nested containers of arbitrary dimensionality. Among them:
 
   - Function  `dimensionality`  returns at compile-time the number of dimensions of the container.
-  - Class `FlatView` makes a multidimensional container appear as a linear array.
-  - Class `BoxedView` (**not yet available**) makes a multidimensional container appear as a [Hyperrectangle](https://en.wikipedia.org/wiki/Hyperrectangle), i.e. eliminating "jaggedness" (returning a default result for access outside the bounds).
+  - Class `FlatView` makes a multidimensional container appear as a linear range.
+  - Class `BoxedView` (**not yet available**) makes a multidimensional container appear as a C array of user-defined bounds, allowing square-bracket access. The behaviour for an access out of the bounds can be customized (throw exception or return default element) 
 
 
 ### Version

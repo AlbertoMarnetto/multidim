@@ -6,30 +6,34 @@
 #include <vector> // computeContainerGeometry
 #include <type_traits> // is_lvalue_reference, enable_if etc.
 
-#include "Helpers.h"
+#include "Basics.h"
 
 // Since this is intended as a general-purpose module,
 // I prefer not to #include any Boost library
 
 namespace multidim {
 /** \addtogroup multidim Multidim library
- * @{
+ */
+
+/** \addtogroup container_metrics ContainerMetrics
+ * \brief Helper templates extending the `<type_traits> library
  */
 
 // **************************************************************************
 // ContainerMetrics
 // **************************************************************************
 /** \brief Offers a series of static functions to deal with multidimensional containers
+ * \ingroup container_metrics
  * \param IsCustomScalar (template parameter): templated `struct` taking a typename as
  * template parameter and providing a bool member `value` indicating if such type is to be considered
  * a scalar type even if it offers a `begin()` function
  */
 template <template<typename> class IsCustomScalar> struct ContainerMetrics {
-/**  @} */
     // **************************************************************************
     // isContainer
     /** \brief Returns `true` if T is a container (i.e. if it has a ContainedType
      * and `IsCustomScalar<T>::value == false`)
+     * \ingroup container_metrics
      * \param T (typename, as template parameter)
      * \note a variant accepting a concrete instance of type `T` is provided for easier use at runtime
      */
@@ -48,7 +52,8 @@ template <template<typename> class IsCustomScalar> struct ContainerMetrics {
     // **************************************************************************
     /** \brief Provides the member typedef `type` as the reference type
      * of the scalar value in a (possibly nested) container,
-     * e.g. vector<set<int>> --> int&
+     * e.g. `vector<set<int>>` --> `int&`
+     * \ingroup container_metrics
      * \param T (typename, as template parameter)
      */
     template <typename T, bool = ContainerMetrics::isContainer<T>()>
@@ -68,7 +73,8 @@ template <template<typename> class IsCustomScalar> struct ContainerMetrics {
     // **************************************************************************
     /** \brief Provides the member typedef `type` as the value type
      * of the scalar value in a (possibly nested) container,
-     * e.g. vector<set<int>> --> int
+     * e.g. `vector<set<int>>` --> `int`
+     * \ingroup container_metrics
      * \param T (typename, as template parameter)
      */
 
@@ -86,6 +92,7 @@ template <template<typename> class IsCustomScalar> struct ContainerMetrics {
     /** \fn constexpr size_t dimensionality()
      * \brief Returns the dimensionality of the container,
      * i.e. how many times we must dereference to get to its ScalarReferenceType
+     * \ingroup container_metrics
      * \param T (typename, as template parameter)
      * \note a variant accepting a concrete instance of type `T` is provided for easier use at runtime
      */
@@ -113,7 +120,9 @@ template <template<typename> class IsCustomScalar> struct ContainerMetrics {
     // **************************************************************************
     // computeContainerGeometry
     // **************************************************************************
-    /** \brief Stores information about the geometry of a (possibly multidimensional) container
+    /** \brief Determines information about bounds and number of scalar elements
+     * of a (possibly multidimensional) container
+     * \ingroup container_metrics
      */
     struct ContainerGeometry {
         /** \brief  maximum value that the i-th index can assume in an expression like
@@ -177,6 +186,7 @@ template <template<typename> class IsCustomScalar> struct ContainerMetrics {
     }
 
     /** \brief Returns the ContainerGeometry associated to a container
+     * \ingroup container_metrics
      * \param container The container
      */
     template<typename Container>
@@ -186,15 +196,15 @@ template <template<typename> class IsCustomScalar> struct ContainerMetrics {
 };
 
 //***************************************************************************
-// Example parameters for ContainerMetrics
+// Trait classes
 //***************************************************************************
-/** \defgroup example_parameters Example parameters for ContainerMetrics
- * \brief Example parameters for ContainerMetrics
- * @{
- *
- *
- * \brief To be used as parameter of ContainerMetrics.
- * The functions of `ContainerMetrics<StringsAsScalars>` treat `std::string` and `std::wstring` as scalar types.
+/** \defgroup custom_scalars "Custom scalar" traits
+ * \brief Trait classes indicating which types should be considered scalars
+ * To be used with Containermetrics, FlatView and BoxedView
+ */
+
+/** \brief Defines `std::string` and `std::wstring` as scalar types.
+ * \ingroup custom_scalars
  * \param T (typename, as template parameter)
  */
 template<typename T>
@@ -205,14 +215,12 @@ struct StringsAsScalars {
     ;
 };
 
-/** \brief To be used as parameter of ContainerMetrics.
- * The functions of `ContainerMetrics<NoCustomScalars>` treat all containers as container types.
+/** \brief Defines no scalar types.
+ * \ingroup custom_scalars
  * \param T (typename, as template parameter)
  */
 template<typename T>
 struct NoCustomScalars{static constexpr bool value = false; /*for any T*/};
-
-/**  @} */ // example_parameters
 
 } // namespace multidim
 

@@ -9,20 +9,15 @@ namespace multidim {
 using std::begin;
 using std::end;
 
-/** \addtogroup multidim Multidim library
- * \brief Functions and classes to work with nested containers of arbitrary dimensionality
- * @{
- */
-
 /** \addtogroup basic_templates Basic templates
  * \brief Helper templates extending the `<type_traits> library
- * @{
  */
 
 //***************************************************************************
 // hasContainedType
 //***************************************************************************
 /** \fn hasContainedType<T>
+ * \ingroup basic_templates
  * \param T (typename, as template parameter)
  * \return
  * - \c true if `*begin(t)` is a valid expression of reference type for an object `t` of type `T`,
@@ -49,6 +44,7 @@ constexpr bool hasContainedType() {return _hasContainedType<T>(0);}
 // IteratorType
 //***************************************************************************
 /** \brief Provides the member typedef `type` as the type of `begin(T)`, as long as `*begin(t)` exists and is lvalue
+ * \ingroup basic_templates
  * \param T (typename, as template parameter)
  */
 template <typename T, typename = typename std::enable_if<hasContainedType<T>()>::type>
@@ -61,6 +57,7 @@ struct IteratorType {
 // ContainedType
 //***************************************************************************
 /** \brief Provides the member typedef `type` as the type of `*begin(T)`, stripped of the reference
+ * \ingroup basic_templates
  * \param T (typename, as template parameter)
  */
 template <typename T, typename = typename std::enable_if<hasContainedType<T>()>::type>
@@ -73,13 +70,14 @@ struct ContainedType {
 // hasPointedType
 //***************************************************************************
 /** \fn hasPointedType<T>
-* \param T (typename, as template parameter)
-* \return
-* - \c true if `*t` is a valid expression of reference type for an object `t` of type `T`,
-* - \c false otherwise
-* \note  For uniformity it would have been better to make this a struct with `::value`,
-* but SFINAE works better with a function
-*/
+ * \ingroup basic_templates
+ * \param T (typename, as template parameter)
+ * \return
+ * - \c true if `*t` is a valid expression of reference type for an object `t` of type `T`,
+ * - \c false otherwise
+ * \note  For uniformity it would have been better to make this a struct with `::value`,
+ * but SFINAE works better with a function
+ */
 template <typename T>
 constexpr auto _hasPointedType(int) -> decltype(*std::declval<T>(), bool()) {
     return std::is_lvalue_reference<decltype(*std::declval<T>())>::value;
@@ -97,6 +95,7 @@ constexpr bool hasPointedType() {return _hasPointedType<T>(0);}
 // PointedType
 //***************************************************************************
 /** \brief Provides the member typedef `type` as the type of `*T`, stripped of the reference
+ * \ingroup basic_templates
  * \param T (typename, as template parameter)
  */
 template <typename T, typename = typename std::enable_if<hasPointedType<T>()>::type>
@@ -109,6 +108,7 @@ struct PointedType {
 // isFirstElementOf
 //***************************************************************************
 /** \brief Returns `true` is `element` is the first element of `container`
+ * \ingroup basic_templates
  * \param element
  * \param container
  */
@@ -122,6 +122,7 @@ inline bool isFirstElementOf(const T& element, const Container& container) {
 // size
 // **************************************************************************
 /** \fn auto size(const Container& c) -> size_t
+ * \ingroup basic_templates
  * \brief Returns the size of the container `c`
  * \param c A container
  */
@@ -143,12 +144,14 @@ static auto size(const Container& c) -> size_t {
 // **************************************************************************
 // Trivial tag classes
 // **************************************************************************
-/** \brief Trivial tag class to indicate the seek direction of an iterator */
+/** \brief Trivial tag class to indicate the seek direction of an iterator
+ * \ingroup basic_templates
+ */
 struct Forward {};
-/** \brief Trivial tag class to indicate the seek direction of an iterator */
+/** \brief Trivial tag class to indicate the seek direction of an iterator
+ * \ingroup basic_templates
+ */
 struct Backward {};
-
-/** @} basic_templates */
 
 } // namespace multidim
 
