@@ -182,9 +182,6 @@ TEST_CASE( "Views", "[multidim]" ) {
             CHECK(it3 == (it1 + 1));
             CHECK(it3 == (1 + it1));
             CHECK(it1 == (it3 - 1));
-
-            std::cout << sizeof(it1) << " " << sizeof(&simple[0]);
-
         }
         {
             // Iteration, forward and back
