@@ -152,6 +152,18 @@ TEST_CASE( "Views", "[multidim]" ) {
             CHECK(it3 == (it1 + 1));
             CHECK(it3 == (1 + it1));
             CHECK(it1 == (it3 - 1));
+            CHECK((it3 - it1) == 1);
+            CHECK((it1 - it3) == -1);
+
+            it1 = fv.begin();
+            auto it0 = it1 - 1;
+            it2 = fv.end();
+            it3 = it2 - 1;
+            CHECK(it0 != it1);
+            CHECK(it0 != it2);
+            CHECK(it2 != it3);
+
+            decltype(fv)::const_iterator converted = fv.begin();
         }
         {
             // The same but on a non-nested container
@@ -182,6 +194,18 @@ TEST_CASE( "Views", "[multidim]" ) {
             CHECK(it3 == (it1 + 1));
             CHECK(it3 == (1 + it1));
             CHECK(it1 == (it3 - 1));
+            CHECK((it3 - it1) == 1);
+            CHECK((it1 - it3) == -1);
+
+            it1 = fv.begin();
+            auto it0 = it1 - 1;
+            it2 = fv.end();
+            it3 = it2 - 1;
+            CHECK(it0 != it1);
+            CHECK(it0 != it2);
+            CHECK(it2 != it3);
+
+            decltype(fv)::const_iterator converted = fv.begin();
         }
         {
             // Iteration, forward and back

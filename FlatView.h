@@ -89,9 +89,8 @@ public:
     void swap(const FlatView& other) {std::swap(*this, other);}
     size_type size() const {
         // size should be constant, I guess that amortized constant will do
-        if (!cachedSizeIsValid_) {
+        if (cachedSize_ == static_cast<size_t>(-1)) {
             cachedSize_ = std::distance(begin(), end());
-            cachedSizeIsValid_ = true;
         }
         return cachedSize_;
     }
@@ -104,8 +103,7 @@ public:
 private:
     TopIterator begin_ = nullptr;
     TopIterator end_ = nullptr;
-    mutable size_t cachedSize_ = 0;
-    mutable bool cachedSizeIsValid_ = false;
+    mutable size_t cachedSize_ = -1;
 
     bool compare(const FlatView& other) const {
         return std::lexicographical_compare(begin(), end(), other.begin(), other.end());
@@ -119,17 +117,22 @@ private:
 // Invariant: the iterator can only be in one of these states:
 // (1) (valid_ == false && curr_ == begin_) :
 //     represents the element "one before the first".
-// (2) (valid_ == true && curr_ >= begin_ && curr_ < end_ && subIterator_.valid_ == true) :
+// (2) (valid_ == true && curr_ >= begin_ && curr_ < end_ && child_.valid_ == true) :
 //     represents a valid scalar element
 // (3) (valid_ == false && curr_ == end_) :
 //     represents the element "one past the end"
 // If (begin_ == end_) then states (1) and (3) collapse, but this does not pose a problem
+
 template <template<typename> class IsCustomScalar, typename TopIterator, bool isConstIterator>
 class FlatViewIterator<IsCustomScalar, TopIterator, isConstIterator, true>
 {
 public:
+    // **************************************************************************
+    // ctors
+    // **************************************************************************
     FlatViewIterator() : begin_{nullptr}, curr_{nullptr}, end_{nullptr} {}
     /* \brief Default constructor. Useless but needed by the requirements on iterators */
+
     FlatViewIterator(const FlatViewIterator&) = default;
     /* \brief Copy constructor. Note that FlatViewIterator is TriviallyCopyable */
 
@@ -140,37 +143,48 @@ public:
         return FlatViewIterator<IsCustomScalar, TopIterator, isConstIterator>{first, last, Backward{}};
     }
 
-    bool valid() const {return (curr_ < end_) && (subIterator_.valid());}
+    // conversion to const_iterator
+    template<bool _isConstIterator = isConstIterator>
+    FlatViewIterator(FlatViewIterator<IsCustomScalar, TopIterator, false, true> other,
+                     typename std::enable_if<_isConstIterator,int>::type* = nullptr) :
+        child_{other.child_},
+        begin_{other.begin_},
+        curr_{other.curr_},
+        end_{other.end_}
+    {}
+
+    // **************************************************************************
+
+    bool valid() const {return (curr_ < end_) && (child_.valid());}
+
+    using raw_value_type = typename ContainerMetrics<IsCustomScalar>::template ScalarValueType<typename PointedType<TopIterator>::type>::type;
+    using const_value_type = typename std::add_const<raw_value_type>::type;
 
     // **************************************************************************
     // Standard members
     // **************************************************************************
-    // iterator.traits
+    // [iterator.traits]
     using iterator_category = std::random_access_iterator_tag;
-    using value_type =
-        typename std::conditional<isConstIterator,
-            typename std::add_const<typename ContainerMetrics<IsCustomScalar>::template ScalarValueType<typename PointedType<TopIterator>::type>::type>::type,
-            typename ContainerMetrics<IsCustomScalar>::template ScalarValueType<typename PointedType<TopIterator>::type>::type
-        >::type;
+    using value_type = typename std::conditional<isConstIterator, const_value_type, raw_value_type>::type;
     using difference_type = ptrdiff_t;
     using pointer = value_type*;
     using reference = value_type&;
 
-    // iterator.iterators
+    // [iterator.iterators]
     reference operator*() const {return dereference();}
     FlatViewIterator& operator++() {increment(); return *this;}
 
-    // input.iterators and output.iterators
+    // [input.iterators] and èoutput.iterators]
     bool operator==(const FlatViewIterator& other) const {return equal(other);}
     bool operator!=(const FlatViewIterator& other) const {return !((*this) == other);}
     pointer operator->() const {return &(**this);}
     FlatViewIterator operator++(int) {auto tmp = *this; ++(*this); return tmp;}
 
-    // bidirectional.iterators
+    // [bidirectional.iterators]
     FlatViewIterator& operator--() {decrement(); return *this;}
     FlatViewIterator operator--(int) {auto other = *this; --(*this); return other;}
 
-    // random.access.iterators
+    // [random.access.iterators]
     FlatViewIterator& operator+=(difference_type n) {advance(n); return *this;}
     FlatViewIterator operator+(difference_type n) const {auto result = (*this); result += n; return result;}
     template <template<typename> class, typename, bool>
@@ -188,6 +202,9 @@ public:
 
 private: // funcs
     using ChildIterator = typename IteratorType<typename PointedType<TopIterator>::type>::type;
+
+    // needed for conversion to const_iterator
+    friend class FlatViewIterator<IsCustomScalar, TopIterator, true, true>;
 
     FlatViewIterator(TopIterator first, TopIterator last, Forward)
         : begin_{first}
@@ -209,10 +226,10 @@ private: // funcs
     // and end(), which does not
     void increment() {
         if (valid()) {
-            // subiterator_ is already in a valid state,
+            // child_ is already in a valid state,
             // move it forward
-            ++subIterator_;
-            if (subIterator_.valid()) return;
+            ++child_;
+            if (child_.valid()) return;
 
             // no more scalar elements at *curr_
             // move ourselves forward
@@ -223,18 +240,18 @@ private: // funcs
             // just updated curr_, try to build
             // a valid subiterator at this location
             if (curr_ == end_) return;
-            subIterator_ = FlatViewIterator<IsCustomScalar, ChildIterator, isConstIterator>::makeBegin(begin(*curr_), end(*curr_));
-            if (subIterator_.valid()) return;
+            child_ = FlatViewIterator<IsCustomScalar, ChildIterator, isConstIterator>::makeBegin(begin(*curr_), end(*curr_));
+            if (child_.valid()) return;
             ++curr_;
         }
     }
 
     void decrement() {
         if (valid()) {
-            // subiterator_ is already in a valid state,
+            // child_ is already in a valid state,
             // move it backward
-            --subIterator_;
-            if (subIterator_.valid()) return;
+            --child_;
+            if (child_.valid()) return;
         }
 
         // no more scalar elements at *curr,
@@ -242,9 +259,9 @@ private: // funcs
         while(1) {
             if (curr_ == begin_) return;
             --curr_;
-            subIterator_ = FlatViewIterator<IsCustomScalar, ChildIterator, isConstIterator>::makeEnd(begin(*curr_), end(*curr_));
-            --subIterator_;
-            if (subIterator_.valid()) return;
+            child_ = FlatViewIterator<IsCustomScalar, ChildIterator, isConstIterator>::makeEnd(begin(*curr_), end(*curr_));
+            --child_;
+            if (child_.valid()) return;
         }
     }
 
@@ -255,14 +272,17 @@ private: // funcs
 
     reference dereference() const {
         if (!valid()) throw std::runtime_error("FlatViewIterator: access out of bounds");
-        return *subIterator_;
+        return *child_;
     }
 
     bool equal(const FlatViewIterator& other) const {
         return (begin_ == other.begin_)
             && (curr_ == other.curr_)
             && (end_ == other.end_)
-            && (!valid() || (subIterator_ == other.subIterator_));
+            && (
+                     (!valid() && !other.valid())
+                  || (valid()  &&  other.valid() && child_ == other.child_)
+                );
     }
 
     difference_type distance_to(const FlatViewIterator& other) const {
@@ -293,7 +313,7 @@ private: // funcs
 
 
 private: // members
-    FlatViewIterator<IsCustomScalar, ChildIterator, isConstIterator> subIterator_;
+    FlatViewIterator<IsCustomScalar, ChildIterator, isConstIterator> child_;
     TopIterator begin_;
     TopIterator curr_;
     TopIterator end_;
@@ -305,6 +325,9 @@ template <template<typename> class IsCustomScalar, typename TopIterator, bool is
 class FlatViewIterator<IsCustomScalar, TopIterator, isConstIterator, false>
 {
 public:
+    // **************************************************************************
+    // ctors
+    // **************************************************************************
     FlatViewIterator() : valid_{false}, begin_{nullptr}, curr_{nullptr}, end_{nullptr} {}
     /* \brief Default constructor. Useless but needed by the requirements on iterators */
 
@@ -318,37 +341,49 @@ public:
         return FlatViewIterator<IsCustomScalar, TopIterator, isConstIterator>{first, last, Backward{}};
     }
 
+    // conversion to const_iterator
+    template<bool _isConstIterator = isConstIterator>
+    FlatViewIterator(FlatViewIterator<IsCustomScalar, TopIterator, false, false> other,
+                     typename std::enable_if<_isConstIterator,int>::type* = nullptr) :
+        valid_{other.valid_},
+        begin_{other.begin_},
+        curr_{other.curr_},
+        end_{other.end_}
+    {}
+
+    // **************************************************************************
+
     bool valid() const {return valid_;}
+
+    using raw_value_type = typename ContainerMetrics<IsCustomScalar>::template ScalarValueType<typename PointedType<TopIterator>::type>::type;
+    using const_value_type = typename std::add_const<raw_value_type>::type;
+
 
     // **************************************************************************
     // Standard members
     // **************************************************************************
-    // iterator.traits
+    // [iterator.traits]
     using iterator_category = std::random_access_iterator_tag;
-    using value_type =
-        typename std::conditional<isConstIterator,
-            typename std::add_const<typename ContainerMetrics<IsCustomScalar>::template ScalarValueType<typename PointedType<TopIterator>::type>::type>::type,
-            typename ContainerMetrics<IsCustomScalar>::template ScalarValueType<typename PointedType<TopIterator>::type>::type
-        >::type;
+    using value_type = typename std::conditional<isConstIterator, const_value_type, raw_value_type>::type;
     using difference_type = ptrdiff_t;
     using pointer = value_type*;
     using reference = value_type&;
 
-    // iterator.iterators
+    // [iterator.iterators]
     reference operator*() const {return dereference();}
     FlatViewIterator& operator++() {increment(); return *this;}
 
-    // input.iterators and output.iterators
+    // [input.iterators] and [output.iterators]
     bool operator==(const FlatViewIterator& other) const {return equal(other);}
     bool operator!=(const FlatViewIterator& other) const {return !((*this) == other);}
     pointer operator->() const {return &(**this);}
     FlatViewIterator operator++(int) {auto tmp = *this; ++(*this); return tmp;}
 
-    // bidirectional.iterators
+    // [bidirectional.iterators]
     FlatViewIterator& operator--() {decrement(); return *this;}
     FlatViewIterator operator--(int) {auto other = *this; --(*this); return other;}
 
-    // random.access.iterators
+    // [random.access.iterators]
     FlatViewIterator& operator+=(difference_type n) {advance(n); return *this;}
     FlatViewIterator operator+(difference_type n) const {auto result = (*this); result += n; return result;}
     template <template<typename> class, typename, bool>
@@ -365,6 +400,9 @@ public:
     reference operator[](difference_type n) const {return *(*this + n);}
 
 private: // funcs
+    // needed for conversion to const_iterator
+    friend class FlatViewIterator<IsCustomScalar, TopIterator, true, false>;
+
     FlatViewIterator(TopIterator first, TopIterator last, Forward)
         : valid_{false}
         , begin_{first}
@@ -405,7 +443,7 @@ private: // funcs
     }
 
     bool equal(const FlatViewIterator& other) const {
-        return (begin_ == other.begin_) && (curr_ == other.curr_) && (end_ == other.end_);
+        return (begin_ == other.begin_) && (curr_ == other.curr_) && (end_ == other.end_) && (valid_ == other.valid_);
     }
 
     difference_type distance_to(const FlatViewIterator& other) const {
@@ -444,6 +482,7 @@ private: // members
 };
 
 // **************************************************************************
+
 template <template<typename> class IsCustomScalar, typename TopIterator, bool isConstIterator>
 auto operator+(
         typename FlatViewIterator<IsCustomScalar, TopIterator, isConstIterator>::difference_type n,
