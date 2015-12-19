@@ -11,16 +11,16 @@ namespace multidim {
  *  \ingroup flat_view
  */
 template <
-    template<typename> class IsCustomScalar,
+    template<typename> class CustomScalarTrait,
     typename TopIterator,
     bool isConstIterator,
-    bool hasSubIterator = ContainerMetrics<IsCustomScalar>::template isContainer<typename PointedType<TopIterator>::type>()
+    bool hasSubIterator = !IsScalar<CustomScalarTrait, typename std::iterator_traits<TopIterator>::value_type>::value
 > class FlatViewIterator;
-template <template<typename> class IsCustomScalar, typename TopIterator, bool isConstIterator>
+template <template<typename> class CustomScalarTrait, typename TopIterator, bool isConstIterator>
 auto operator+(
-        typename FlatViewIterator<IsCustomScalar, TopIterator, isConstIterator>::difference_type n,
-        const FlatViewIterator<IsCustomScalar, TopIterator, isConstIterator>& other)
-    -> FlatViewIterator<IsCustomScalar, TopIterator, isConstIterator>;
+        typename FlatViewIterator<CustomScalarTrait, TopIterator, isConstIterator>::difference_type n,
+        const FlatViewIterator<CustomScalarTrait, TopIterator, isConstIterator>& other)
+    -> FlatViewIterator<CustomScalarTrait, TopIterator, isConstIterator>;
 
 // **************************************************************************
 
@@ -28,7 +28,7 @@ auto operator+(
 // FlatView
 //***************************************************************************
 /** \brief An class which makes the pointed range appear as a linear array
- * \param IsCustomScalar
+ * \param CustomScalarTrait
  * \param TopIterator
  * \ingroup flat_view
  * \note This **almost** respects the General container requirements (§23.2.1),
@@ -36,11 +36,11 @@ auto operator+(
  * its elements.
  * In general, we tried to follow the semantics of C++17's `string_view`.
  */
-template <template<typename> class IsCustomScalar, typename TopIterator>
+template <template<typename> class CustomScalarTrait, typename TopIterator>
 class FlatView {
 public:
-    using iterator = FlatViewIterator<IsCustomScalar, TopIterator, false>;
-    using const_iterator =  FlatViewIterator<IsCustomScalar, TopIterator, true>;
+    using iterator = FlatViewIterator<CustomScalarTrait, TopIterator, false>;
+    using const_iterator =  FlatViewIterator<CustomScalarTrait, TopIterator, true>;
     using value_type = typename iterator::value_type;
     using reference = typename iterator::reference;
     using const_reference = typename const_iterator::reference;
@@ -123,8 +123,8 @@ private:
 //     represents the element "one past the end"
 // If (begin_ == end_) then states (1) and (3) collapse, but this does not pose a problem
 
-template <template<typename> class IsCustomScalar, typename TopIterator, bool isConstIterator>
-class FlatViewIterator<IsCustomScalar, TopIterator, isConstIterator, true>
+template <template<typename> class CustomScalarTrait, typename TopIterator, bool isConstIterator>
+class FlatViewIterator<CustomScalarTrait, TopIterator, isConstIterator, true>
 {
 public:
     // **************************************************************************
@@ -137,15 +137,15 @@ public:
     /* \brief Copy constructor. Note that FlatViewIterator is TriviallyCopyable */
 
     static FlatViewIterator makeBegin(TopIterator first, TopIterator last) {
-        return FlatViewIterator<IsCustomScalar, TopIterator, isConstIterator>{first, last, Forward{}};
+        return FlatViewIterator<CustomScalarTrait, TopIterator, isConstIterator>{first, last, Forward{}};
     }
     static FlatViewIterator makeEnd(TopIterator first, TopIterator last) {
-        return FlatViewIterator<IsCustomScalar, TopIterator, isConstIterator>{first, last, Backward{}};
+        return FlatViewIterator<CustomScalarTrait, TopIterator, isConstIterator>{first, last, Backward{}};
     }
 
     // conversion to const_iterator
     template<bool _isConstIterator = isConstIterator>
-    FlatViewIterator(FlatViewIterator<IsCustomScalar, TopIterator, false, true> other,
+    FlatViewIterator(FlatViewIterator<CustomScalarTrait, TopIterator, false, true> other,
                      typename std::enable_if<_isConstIterator,int>::type* = nullptr) :
         child_{other.child_},
         begin_{other.begin_},
@@ -157,7 +157,7 @@ public:
 
     bool valid() const {return (curr_ < end_) && (child_.valid());}
 
-    using raw_value_type = typename ContainerMetrics<IsCustomScalar>::template ScalarValueType<typename PointedType<TopIterator>::type>::type;
+    using raw_value_type = typename IteratorScalarType<CustomScalarTrait, TopIterator>::type;
     using const_value_type = typename std::add_const<raw_value_type>::type;
 
     // **************************************************************************
@@ -201,10 +201,10 @@ public:
     reference operator[](difference_type n) const {return *(*this + n);}
 
 private: // funcs
-    using ChildIterator = typename IteratorType<typename PointedType<TopIterator>::type>::type;
+    using ChildIterator = typename IteratorType<typename std::iterator_traits<TopIterator>::reference>::type;
 
     // needed for conversion to const_iterator
-    friend class FlatViewIterator<IsCustomScalar, TopIterator, true, true>;
+    friend class FlatViewIterator<CustomScalarTrait, TopIterator, true, true>;
 
     FlatViewIterator(TopIterator first, TopIterator last, Forward)
         : begin_{first}
@@ -240,7 +240,7 @@ private: // funcs
             // just updated curr_, try to build
             // a valid subiterator at this location
             if (curr_ == end_) return;
-            child_ = FlatViewIterator<IsCustomScalar, ChildIterator, isConstIterator>::makeBegin(begin(*curr_), end(*curr_));
+            child_ = FlatViewIterator<CustomScalarTrait, ChildIterator, isConstIterator>::makeBegin(begin(*curr_), end(*curr_));
             if (child_.valid()) return;
             ++curr_;
         }
@@ -259,7 +259,7 @@ private: // funcs
         while(1) {
             if (curr_ == begin_) return;
             --curr_;
-            child_ = FlatViewIterator<IsCustomScalar, ChildIterator, isConstIterator>::makeEnd(begin(*curr_), end(*curr_));
+            child_ = FlatViewIterator<CustomScalarTrait, ChildIterator, isConstIterator>::makeEnd(begin(*curr_), end(*curr_));
             --child_;
             if (child_.valid()) return;
         }
@@ -313,7 +313,7 @@ private: // funcs
 
 
 private: // members
-    FlatViewIterator<IsCustomScalar, ChildIterator, isConstIterator> child_;
+    FlatViewIterator<CustomScalarTrait, ChildIterator, isConstIterator> child_;
     TopIterator begin_;
     TopIterator curr_;
     TopIterator end_;
@@ -321,8 +321,8 @@ private: // members
 
 // **************************************************************************
 // Specialization for TopIterator pointing to a scalar
-template <template<typename> class IsCustomScalar, typename TopIterator, bool isConstIterator>
-class FlatViewIterator<IsCustomScalar, TopIterator, isConstIterator, false>
+template <template<typename> class CustomScalarTrait, typename TopIterator, bool isConstIterator>
+class FlatViewIterator<CustomScalarTrait, TopIterator, isConstIterator, false>
 {
 public:
     // **************************************************************************
@@ -335,15 +335,15 @@ public:
     /* \brief Copy constructor. Note that FlatViewIterator is TriviallyCopyable */
 
     static FlatViewIterator makeBegin(TopIterator first, TopIterator last) {
-        return FlatViewIterator<IsCustomScalar, TopIterator, isConstIterator>{first, last, Forward{}};
+        return FlatViewIterator<CustomScalarTrait, TopIterator, isConstIterator>{first, last, Forward{}};
     }
     static FlatViewIterator makeEnd(TopIterator first, TopIterator last) {
-        return FlatViewIterator<IsCustomScalar, TopIterator, isConstIterator>{first, last, Backward{}};
+        return FlatViewIterator<CustomScalarTrait, TopIterator, isConstIterator>{first, last, Backward{}};
     }
 
     // conversion to const_iterator
     template<bool _isConstIterator = isConstIterator>
-    FlatViewIterator(FlatViewIterator<IsCustomScalar, TopIterator, false, false> other,
+    FlatViewIterator(FlatViewIterator<CustomScalarTrait, TopIterator, false, false> other,
                      typename std::enable_if<_isConstIterator,int>::type* = nullptr) :
         valid_{other.valid_},
         begin_{other.begin_},
@@ -355,7 +355,7 @@ public:
 
     bool valid() const {return valid_;}
 
-    using raw_value_type = typename ContainerMetrics<IsCustomScalar>::template ScalarValueType<typename PointedType<TopIterator>::type>::type;
+    using raw_value_type = typename IteratorScalarType<CustomScalarTrait, TopIterator>::type;
     using const_value_type = typename std::add_const<raw_value_type>::type;
 
 
@@ -401,7 +401,7 @@ public:
 
 private: // funcs
     // needed for conversion to const_iterator
-    friend class FlatViewIterator<IsCustomScalar, TopIterator, true, false>;
+    friend class FlatViewIterator<CustomScalarTrait, TopIterator, true, false>;
 
     FlatViewIterator(TopIterator first, TopIterator last, Forward)
         : valid_{false}
@@ -483,11 +483,11 @@ private: // members
 
 // **************************************************************************
 
-template <template<typename> class IsCustomScalar, typename TopIterator, bool isConstIterator>
+template <template<typename> class CustomScalarTrait, typename TopIterator, bool isConstIterator>
 auto operator+(
-        typename FlatViewIterator<IsCustomScalar, TopIterator, isConstIterator>::difference_type n,
-        const FlatViewIterator<IsCustomScalar, TopIterator, isConstIterator>& other)
-    -> FlatViewIterator<IsCustomScalar, TopIterator, isConstIterator>
+        typename FlatViewIterator<CustomScalarTrait, TopIterator, isConstIterator>::difference_type n,
+        const FlatViewIterator<CustomScalarTrait, TopIterator, isConstIterator>& other)
+    -> FlatViewIterator<CustomScalarTrait, TopIterator, isConstIterator>
 {
     return other + n;
 }
@@ -497,20 +497,20 @@ auto operator+(
 // makeFlatView
 //***************************************************************************
 /** \brief Factory method to build a FlatView of a container.
- * \param IsCustomScalar : trait template for custom scalars. If omitted, `NoCustomScalars` will be used
+ * \param CustomScalarTrait : trait template for custom scalars. If omitted, `NoCustomScalars` will be used
  * \param container : the container on which the View will be based
  */
-template <template<typename> class IsCustomScalar = NoCustomScalars, typename Container = void>
-auto makeFlatView(Container& container) -> FlatView<IsCustomScalar, decltype(begin(container))>  {
-    return FlatView<IsCustomScalar, decltype(begin(container))>{begin(container), end(container)};
+template <template<typename> class CustomScalarTrait = NoCustomScalars, typename Container = void>
+auto makeFlatView(Container& container) -> FlatView<CustomScalarTrait, decltype(begin(container))>  {
+    return FlatView<CustomScalarTrait, decltype(begin(container))>{begin(container), end(container)};
 }
 /** \brief Factory method to build a FlatView of a range
- * \param IsCustomScalar : trait template for custom scalars. If omitted, `NoCustomScalars` will be used
+ * \param CustomScalarTrait : trait template for custom scalars. If omitted, `NoCustomScalars` will be used
  * \param first, last : iterators delimiting the range
  */
-template <template<typename> class IsCustomScalar = NoCustomScalars, typename T = void>
-auto makeFlatView(T first, T last) -> FlatView<IsCustomScalar, T>  {
-    return FlatView<IsCustomScalar, T>{first, last};
+template <template<typename> class CustomScalarTrait = NoCustomScalars, typename T = void>
+auto makeFlatView(T first, T last) -> FlatView<CustomScalarTrait, T>  {
+    return FlatView<CustomScalarTrait, T>{first, last};
 }
 
 } // namespace multidim

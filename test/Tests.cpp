@@ -17,9 +17,6 @@ using std::string;
 using std::begin;
 
 TEST_CASE( "ContainerHelpers", "[multidim]" ) {
-    using Metrics1 = md::ContainerMetrics<md::NoCustomScalars>;
-    using Metrics2 = md::ContainerMetrics<md::StringsAsScalars>;
-
     int scalar;
     std::vector<int> vectorInt(8);
     int cArray[2][3] = {{1, 2, 3}, {4, 5, 6}};
@@ -35,18 +32,27 @@ TEST_CASE( "ContainerHelpers", "[multidim]" ) {
     };
 
     SECTION("Basic templates") {
-#define TEST_CONTAINED_TYPE(x, y) (std::is_same<typename md::ContainedType<decltype(x)>::type, y>::value \
-                                && std::is_same<typename md::PointedType<decltype(begin(x))>::type, y>::value)
-        CHECK(TEST_CONTAINED_TYPE(vectorInt, int&));
-        CHECK(TEST_CONTAINED_TYPE(cArray, int(&)[3]));
-        CHECK(TEST_CONTAINED_TYPE(refCArray, const int(&)[3]));
-        CHECK(TEST_CONTAINED_TYPE(tricky, const std::vector<std::vector<int[5]>>&)); // tricky is a set, contained are constants
-        CHECK(TEST_CONTAINED_TYPE(table, std::list<std::string>&));
-        CHECK(TEST_CONTAINED_TYPE(riddled, std::vector<std::vector<float>>&));
+        CHECK(md::IsRange<decltype(scalar)>::value == false);
+        CHECK(md::IsRange<decltype(vectorInt)>::value == true);
+        CHECK(md::IsRange<decltype(cArray)>::value == true);
+        CHECK(md::IsRange<decltype(refCArray)>::value == true);
+        CHECK(md::IsRange<decltype(tricky)>::value == true);
+        CHECK(md::IsRange<decltype(table)>::value == true);
+        CHECK(md::IsRange<decltype(riddled)>::value == true);
 
-#define TEST_SCALAR_TYPE(x, y) (std::is_same<Metrics1::ScalarReferenceType<decltype(x)>::type, y>::value)
-#define TEST_SCALAR_TYPE_CUSTOM(x, y) (std::is_same<Metrics2::ScalarReferenceType<decltype(x)>::type, y>::value)
-        CHECK(TEST_SCALAR_TYPE(scalar, int&));
+        CHECK((md::IsScalar<md::NoCustomScalars, decltype(scalar)>::value) == true);
+        CHECK((md::IsScalar<md::NoCustomScalars, decltype(vectorInt)>::value) == false);
+        CHECK((md::IsScalar<md::NoCustomScalars, decltype(cArray)>::value) == false);
+        CHECK((md::IsScalar<md::NoCustomScalars, decltype(refCArray)>::value) == false);
+        CHECK((md::IsScalar<md::NoCustomScalars, decltype(tricky)>::value) == false);
+        CHECK((md::IsScalar<md::NoCustomScalars, decltype(table)>::value) == false);
+        CHECK((md::IsScalar<md::NoCustomScalars, decltype(riddled)>::value) == false);
+        CHECK((md::IsScalar<md::NoCustomScalars, decltype(table.front().front())>::value) == false);
+        CHECK((md::IsScalar<md::StringsAsScalars, decltype(table.front().front())>::value) == true);
+
+
+#define TEST_SCALAR_TYPE(x, y) (std::is_same<md::IteratorScalarType<md::NoCustomScalars, decltype(begin(x))>::reference, y>::value)
+#define TEST_SCALAR_TYPE_CUSTOM(x, y) (std::is_same<md::IteratorScalarType<md::StringsAsScalars, decltype(begin(x))>::reference, y>::value)
         CHECK(TEST_SCALAR_TYPE(vectorInt, int&));
         CHECK(TEST_SCALAR_TYPE(cArray, int&));
         CHECK(TEST_SCALAR_TYPE(refCArray, const int&));
@@ -55,52 +61,44 @@ TEST_CASE( "ContainerHelpers", "[multidim]" ) {
         CHECK(TEST_SCALAR_TYPE_CUSTOM(table, std::string&));
         CHECK(TEST_SCALAR_TYPE(riddled, float&));
 
-        CHECK(Metrics1::isContainer(scalar) == false);
-        CHECK(Metrics1::isContainer(vectorInt) == true);
-        CHECK(Metrics1::isContainer(cArray) == true);
-        CHECK(Metrics1::isContainer(refCArray) == true);
-        CHECK(Metrics1::isContainer(tricky) == true);
-        CHECK(Metrics1::isContainer(table) == true);
-        CHECK(Metrics1::isContainer(riddled) == true);
-
-        CHECK(Metrics1::dimensionality(scalar) == 0);
-        CHECK(Metrics1::dimensionality(vectorInt) == 1);
-        CHECK(Metrics1::dimensionality(cArray) == 2);
-        CHECK(Metrics1::dimensionality(refCArray) == 2);
-        CHECK(Metrics1::dimensionality(tricky) == 4);
-        CHECK(Metrics1::dimensionality(table) == 3);
-        CHECK(Metrics2::dimensionality(table) == 2);
-        CHECK(Metrics1::dimensionality(riddled) == 3);
+        CHECK(md::dimensionality(scalar) == 0);
+        CHECK(md::dimensionality(vectorInt) == 1);
+        CHECK(md::dimensionality(cArray) == 2);
+        CHECK(md::dimensionality(refCArray) == 2);
+        CHECK(md::dimensionality(tricky) == 4);
+        CHECK(md::dimensionality(table) == 3);
+        CHECK(md::dimensionality<md::StringsAsScalars>(table) == 2);
+        CHECK(md::dimensionality(riddled) == 3);
     }
 
-    SECTION( "computeContainerGeometry") {
+    SECTION( "bounds") {
         vector<vector<int>> jaggedLastDimension = {{1,2,3},{4,5}};
         vector<vector<vector<int>>> jaggedInternally = {
             {{1,2,3},{4,5,6}},
             {{1,2,3},{4,5}},
         };
 
-        CHECK(Metrics1::computeContainerGeometry(scalar).numberOfScalarElements == 1);
-        CHECK(Metrics1::computeContainerGeometry(vectorInt).numberOfScalarElements == 8);
-        CHECK(Metrics1::computeContainerGeometry(cArray).numberOfScalarElements == 6);
-        CHECK(Metrics1::computeContainerGeometry(refCArray).numberOfScalarElements == 6);
-        CHECK(Metrics1::computeContainerGeometry(tricky).numberOfScalarElements == 0);
-        CHECK(Metrics1::computeContainerGeometry(table).numberOfScalarElements == 6);
-        CHECK(Metrics2::computeContainerGeometry(table).numberOfScalarElements == 4);
-        CHECK(Metrics1::computeContainerGeometry(riddled).numberOfScalarElements == 7);
-        CHECK(Metrics1::computeContainerGeometry(jaggedLastDimension).numberOfScalarElements == 5);
-        CHECK(Metrics1::computeContainerGeometry(jaggedInternally).numberOfScalarElements == 11);
+        CHECK(md::scalarSize(scalar) == 1);
+        CHECK(md::scalarSize(vectorInt) == 8);
+        CHECK(md::scalarSize(cArray) == 6);
+        CHECK(md::scalarSize(refCArray) == 6);
+        CHECK(md::scalarSize(tricky) == 0);
+        CHECK(md::scalarSize(table) == 6);
+        CHECK(md::scalarSize<md::StringsAsScalars>(table) == 4);
+        CHECK(md::scalarSize(riddled) == 7);
+        CHECK(md::scalarSize(jaggedLastDimension) == 5);
+        CHECK(md::scalarSize(jaggedInternally) == 11);
 
-        CHECK(Metrics1::computeContainerGeometry(scalar).bounds == (vector<size_t> {}));
-        CHECK(Metrics1::computeContainerGeometry(vectorInt).bounds == (vector<size_t> {8}));
-        CHECK(Metrics1::computeContainerGeometry(cArray).bounds == (vector<size_t> {2, 3}));
-        CHECK(Metrics1::computeContainerGeometry(refCArray).bounds == (vector<size_t> {2, 3}));
-        CHECK(Metrics1::computeContainerGeometry(tricky).bounds == (vector<size_t> {0, 0, 0, 0})); // (*)
-        CHECK(Metrics1::computeContainerGeometry(table).bounds == (vector<size_t> {2, 2, 3}));
-        CHECK(Metrics2::computeContainerGeometry(table).bounds == (vector<size_t> {2, 2}));
-        CHECK(Metrics1::computeContainerGeometry(riddled).bounds == (vector<size_t> {5, 5, 2}));
-        CHECK(Metrics1::computeContainerGeometry(jaggedLastDimension).bounds == (vector<size_t> {2, 3}));
-        CHECK(Metrics1::computeContainerGeometry(jaggedInternally).bounds == (vector<size_t> {2, 2, 3}));
+        // CHECK(md::bounds(scalar) == (vector<size_t> {})); <-- cannot compile
+        CHECK(md::bounds(vectorInt) == (vector<size_t> {8}));
+        CHECK(md::bounds(cArray) == (vector<size_t> {2, 3}));
+        CHECK(md::bounds(refCArray) == (vector<size_t> {2, 3}));
+        CHECK(md::bounds(tricky) == (vector<size_t> {0, 0, 0, 0})); // (*)
+        CHECK(md::bounds(table) == (vector<size_t> {2, 2, 3}));
+        CHECK(md::bounds<md::StringsAsScalars>(table) == (vector<size_t> {2, 2}));
+        CHECK(md::bounds(riddled) == (vector<size_t> {5, 5, 2}));
+        CHECK(md::bounds(jaggedLastDimension) == (vector<size_t> {2, 3}));
+        CHECK(md::bounds(jaggedInternally) == (vector<size_t> {2, 2, 3}));
 
         // (*) the last index should maybe be 5, but it's a moot point as the object cannot be filled,
         // see http://stackoverflow.com/questions/11044304/can-i-push-an-array-of-int-to-a-c-vector
@@ -127,8 +125,9 @@ TEST_CASE( "Views", "[multidim]" ) {
     SECTION("FlatView") {
         {
             // Iterator operators
-            const vector<vector<int>> uriahFuller = {{},{1,2,3,},{4},{},{},{5,6}};
-            auto fv = md::makeFlatView(uriahFuller);
+            const vector<int> simple = {1,2,3,4,5,6};
+
+            auto fv = md::makeFlatView(simple);
             auto it1 = fv.begin();
 
             CHECK(*(it1) == 1);
@@ -166,11 +165,12 @@ TEST_CASE( "Views", "[multidim]" ) {
             decltype(fv)::const_iterator converted = fv.begin();
         }
         {
-            // The same but on a non-nested container
-            // (to test the other specialization of FlatViewIterator)
-            const vector<int> simple = {1,2,3,4,5,6};
 
-            auto fv = md::makeFlatView(simple);
+            // The same but on a nested container
+            // (to test the other specialization of FlatViewIterator)
+
+            const vector<vector<int>> uriahFuller = {{},{1,2,3,},{4},{},{},{5,6}};
+            auto fv = md::makeFlatView(uriahFuller);
             auto it1 = fv.begin();
 
             CHECK(*(it1) == 1);
