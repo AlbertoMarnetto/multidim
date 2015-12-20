@@ -1,6 +1,9 @@
 bin/
 obj/
 doc/
+test/bin
+test/doxygen
+test/obj
 
 # Compiled Object files
 *.slo

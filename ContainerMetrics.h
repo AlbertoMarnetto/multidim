@@ -10,57 +10,48 @@
 // I prefer not to #include any Boost library
 
 namespace multidim {
-/** \addtogroup multidim Multidim library
- */
 
 /** \defgroup basic_templates Basic templates
- * \ingroup multidim
  * \brief Helper templates extending the `<type_traits> library
  */
 
-/** \defgroup container_metrics ContainerMetrics
- * \ingroup multidim
- * \brief Helper templates extending the `<type_traits>` library
+/** \defgroup utility_functions Functions
+ * \brief Utility functions for multilevel containers
+ */
+
+/** \defgroup custom_scalars Implementations for "CustomScalarTrait"
+ * \brief Implementations for the "CustomScalarTrait" template argument of
+ * the library main classes and functions.
+ * Each implementation indicates which classes should be considered scalars,
+ * even if they are containers.
  */
 
 using std::begin;
 using std::end;
 
-//***************************************************************************
-// isFirstElementOf
-//***************************************************************************
-/** \brief Returns `true` is `element` is the first element of `container`
- * \ingroup basic_templates
- * \param element
- * \param container
- */
-template <typename T, typename Container>
-inline bool isFirstElementOf(const T& element, const Container& container) {
-    using std::begin;
-    return &element == &*begin(container);
-}
+constexpr size_t NO_VALUE = static_cast<size_t>(-1);
 
 // **************************************************************************
 // size
 // **************************************************************************
-/** \fn auto size(const T& t) -> size_t
+/** \fn auto size(const Container& container) -> size_t
  * \ingroup basic_templates
- * \brief Returns the size of `t`
- * \param c A container
+ * \brief Returns the size of `container`
+ * \param container A container (is is only required to support `begin()` and `end()`)
  */
-template<typename T>
-static auto _size(const T& t, long) -> decltype(begin(t), end(t), size_t()) {
-    return std::distance(begin(t), end(t));
+template<typename Container>
+static auto _size(const Container& container, long) -> decltype(begin(container), end(container), size_t()) {
+    return std::distance(begin(container), end(container));
 }
-template<typename T>
-static auto _size(const T& t, int) -> decltype(t.size(), size_t()) {
-    return t.size();
+template<typename Container>
+static auto _size(const Container& container, int) -> decltype(container.size(), size_t()) {
+    return container.size();
 }
 
 // Entry point
-template<typename T>
-static auto size(const T& t) -> size_t {
-    return _size(t, 0);
+template<typename Container>
+static auto size(const Container& container) -> size_t {
+    return _size(container, 0);
 }
 
 // **************************************************************************
@@ -80,7 +71,8 @@ struct Backward {};
 //***************************************************************************
 /**
  * \brief Provides the member constant `value`, which is
- * `true` if `begin(T)` and `end(T)` are iterators of the same type
+ * `true` if `begin(T)` and `end(T)` return the same type,
+ * which must be an iterator class
  * `false` otherwise
  * \ingroup basic_templates
  * \param T (typename)
@@ -130,21 +122,21 @@ struct IteratorType<T, true> {
 //***************************************************************************
 /**
  * \brief Provides the member constant `value`, which is
- * `true` if `T` is an iterator whose pointee is a range,
+ * `true` if `Iterator` is an iterator whose pointee is a range,
  * `false` otherwise
  * \ingroup basic_templates
- * \param T (typename)
+ * \param Iterator (typename)
 */
 
-template <typename T>
+template <typename Iterator>
 struct PointsToRange {
-    template <typename T1 = T>
+    template <typename Iterator1 = Iterator>
     static constexpr auto _pointsToRange(int)
     -> decltype(
-        std::declval<typename std::iterator_traits<T1>::reference_type>(),
+        std::declval<typename std::iterator_traits<Iterator1>::reference_type>(),
         bool()
     ) {
-        return IsRange<T1>::value;
+        return IsRange<Iterator1>::value;
     }
 
     static constexpr auto _pointsToRange(long) -> decltype(bool()) {
@@ -157,13 +149,6 @@ struct PointsToRange {
 //***************************************************************************
 // CustomScalarTrait
 //***************************************************************************
-/** \defgroup custom_scalar Implementations for"CustomScalarTrait"
- * \brief Implementations for the "CustomScalarTrait" template argument of
- * the library main classes and functions.
- * These trait template indicates which classes should be considered scalars,
- * even if they are containers.
- */
-
 /** \brief Defines `std::string` and `std::wstring` as scalar types.
  * \ingroup custom_scalars
  * \param T (typename, as template parameter)
@@ -177,7 +162,7 @@ struct StringsAsScalars {
 };
 
 /** \brief Defines no scalar types.
- * \ingroup custom_scalar
+ * \ingroup custom_scalars
  * \param T (typename, as template parameter)
  */
 template<typename T>
@@ -189,9 +174,8 @@ struct NoCustomScalars{static constexpr bool isCustomScalar = false; /*for any T
 /** \brief Provides the member constant `value`, which is
  * `true` if `T` is a scalar (i.e. if it is not a container,
  * or if it defined as custom scalar by the trait)
- * \ingroup container_metrics
+ * \ingroup basic_templates
  * \param T (typename, as template parameter)
- * \note a variant accepting a concrete instance of type `T` is provided for easier use at runtime
  */
 // **************************************************************************
 template <template<typename> class CustomScalarTrait = NoCustomScalars, typename T = void>
@@ -202,10 +186,11 @@ struct IsScalar {
 // **************************************************************************
 // IteratorScalarType
 // **************************************************************************
-/** \brief Provides the member typedef `type` as the reference type
- * of the scalar value in a (possibly nested) iterator,
- * e.g. `vector<set<int>>::iterator` --> `int&`
- * \ingroup container_metrics
+/** \brief Provides the member typedef `type` and `reference`
+ * as the value and reference scalar type
+ * in a (possibly nested) iterator,
+ * e.g. `vector<set<int>>::iterator` --> `type:int, reference = int&`
+ * \ingroup basic_templates
  * \param CustomScalarTrait (trait template)
  * \param Iterator (typename)
  */
@@ -216,32 +201,33 @@ template <
 >
 struct IteratorScalarType;
 
-// Specialization for Iterator pointing to scalar: just dereference
+// Specialization for Iterator pointing to scalar
 template <template<typename> class CustomScalarTrait, typename Iterator>
 struct IteratorScalarType<CustomScalarTrait, Iterator, true> {
     using reference = typename std::iterator_traits<Iterator>::reference;
-    using type = typename std::remove_reference<reference>::type;
+    using type = typename std::iterator_traits<Iterator>::value_type;
 };
 
 // Specialization for Iterator pointing to a not scalar: recurse to next level
 template <template<typename> class CustomScalarTrait, typename Iterator>
 struct IteratorScalarType<CustomScalarTrait, Iterator, false> {
-    using reference =
-        typename IteratorScalarType<
+    using MyScalarType =
+        IteratorScalarType<
             CustomScalarTrait,
             decltype(begin(
                 std::declval<typename std::iterator_traits<Iterator>::reference>()
             ))
-        >::reference;
-    using type = typename std::remove_reference<reference>::type;
+        >;
+
+    using reference = typename MyScalarType::reference;
+    using type = typename MyScalarType::type;
 };
 
 //***************************************************************************
 // Dimensionality
 //***************************************************************************
-/** \brief Provides the `size_t` member `value` as the dimensionality,
- * i.e. the number of levels in a multilevel range
- * \ingroup container_metrics
+/** \brief Provides the `size_t` member `value` as the dimensionality of a type
+ * \ingroup basic_templates
  * \param CustomScalarTrait (trait template)
  * \param T (typename)
  */
@@ -269,57 +255,116 @@ struct Dimensionality<CustomScalarTrait, T, false> {
 };
 
 // Function version
-/** \brief Returns the dimensionality,
- * i.e. the number of levels in a multilevel range (or 0 if the argument is a custom scalar)
- * \ingroup container_metrics
+/** \brief Returns the dimensionality of the type of the argument
+ * (or 0 if such type is a scalar)
+ * \ingroup utility_functions
  * \param CustomScalarTrait (trait template)
- * \param argument : the object whose dimensionality will be returned
+ * \param argument the object whose dimensionality will be returned
  */
 template <template<typename> class CustomScalarTrait = NoCustomScalars, typename T = void>
-static constexpr size_t dimensionality(const T& arg) {
-    return Dimensionality<CustomScalarTrait, const T&>::value;
+constexpr size_t dimensionality(T const& arg) {
+    return Dimensionality<CustomScalarTrait, T const&>::value;
+}
+
+/** \brief Returns the dimensionality of the type of the range
+ * \ingroup utility_functions
+ * \param CustomScalarTrait (trait template)
+ * \param first, last the range whose dimensionality will be returned
+ */
+template <template<typename> class CustomScalarTrait = NoCustomScalars, typename Iterator = void>
+constexpr size_t dimensionality(Iterator const& first, Iterator const& last) {
+    return 1+Dimensionality<CustomScalarTrait, decltype(*first)>::value;
 }
 
 // **************************************************************************
 // bounds
 // **************************************************************************
-/** \brief Determines the bounds of an object of an object, i.e. its maximum
- * size in all its subdimensions
- * \ingroup container_metrics
+/** \fn bounds(T const& argument);
+ * \brief Returns a `vector<size_t>` containing the bounds of an object,
+ * i.e. its maximum size in all its subdimensions (or an empty vector
+ * is the argument is a scalar)
+ * \ingroup utility_functions
+ * \param CustomScalarTrait (trait template)
+ * \param argument the object whose bounds will be returned
  */
 
+/** \fn bounds(Iterator const first, Iterator const last, size_t precomputedDistance = NO_VALUE);
+ * \brief Returns a `vector<size_t>` containing the bounds of a range,
+ * i.e. its maximum size in all its subdimensions
+ * \ingroup utility_functions
+ * \param CustomScalarTrait (trait template)
+ * \param first, last  the range whose bounds will be returned
+ * \param precomputedDistance (optional) the value of (last - first)
+ */
+
+// Version for scalars
 template <
     template<typename> class CustomScalarTrait = NoCustomScalars,
     typename T = void,
-    typename std::enable_if<(Dimensionality<CustomScalarTrait, T>::value == 1), long>::type = 0xBEEF
+    typename std::enable_if<(true == IsScalar<CustomScalarTrait, T>::value), long>::type = 0xBEEF
 >
-std::vector<size_t> bounds(const T& argument) {
-    return std::vector<size_t>{size(argument),};
+std::vector<size_t> bounds(T const& argument) {
+    return std::vector<size_t> {};
 }
 
+// Forward-declare version for containers
 template <
     template<typename> class CustomScalarTrait = NoCustomScalars,
     typename T = void,
-    typename std::enable_if<(Dimensionality<CustomScalarTrait, T>::value >= 2), int>::type = 0xBEEF
+    typename std::enable_if<(false == IsScalar<CustomScalarTrait, T>::value), int>::type = 0xBEEF
 >
-std::vector<size_t> bounds(const T& argument) {
-    constexpr auto dimensionalityT = Dimensionality<CustomScalarTrait, T>::value;
+std::vector<size_t> bounds(const T& argument);
 
-    std::vector<size_t> containerBounds(dimensionalityT);
 
-    // The outermost bound is obviously the size of the container
-    containerBounds[0] = size(argument);
+// Version for monolevel ranges
+template <
+    template<typename> class CustomScalarTrait = NoCustomScalars,
+    typename Iterator = void,
+    typename std::enable_if<
+        (true == IsScalar<CustomScalarTrait, typename std::iterator_traits<Iterator>::value_type>::value),
+        long
+    >::type = 0xBEEF
+>
+std::vector<size_t> bounds(Iterator const first, Iterator const last, size_t precomputedDistance = NO_VALUE) {
+    if (precomputedDistance != NO_VALUE) {
+        return std::vector<size_t>{precomputedDistance,};
+    } else {
+        return std::vector<size_t>{static_cast<size_t>(std::distance(first, last)),};
+    }
+}
+
+// Version for multilevel ranges
+template <
+    template<typename> class CustomScalarTrait = NoCustomScalars,
+    typename Iterator = void,
+    typename std::enable_if<
+        (false == IsScalar<CustomScalarTrait, typename std::iterator_traits<Iterator>::value_type>::value),
+        int
+    >::type = 0xBEEF
+>
+std::vector<size_t> bounds(Iterator const first, Iterator const last, size_t precomputedDistance = NO_VALUE) {
+    constexpr auto rangeDimensionality = dimensionality<CustomScalarTrait>(first, last);
+
+    std::vector<size_t> containerBounds(rangeDimensionality);
+
+    // The outermost bound is the size of the range
+    if (precomputedDistance != NO_VALUE) {
+        containerBounds[0] = precomputedDistance;
+    } else {
+        containerBounds[0] = std::distance(first, last);
+    }
 
     // The other bounds are computed from the subcontainers info
-    for (const auto& subContainer : argument) {
+    for (auto it = first; it != last; ++it) {
+        const auto& subContainer = *it;
         const auto& subContainerBounds = bounds<CustomScalarTrait>(subContainer);
 
-        if (subContainerBounds.size() != dimensionalityT-1) {
+        if (subContainerBounds.size() != rangeDimensionality-1) {
             throw std::runtime_error("bounds : encountered Container with strange dimensionality");
         }
 
         // Set tentative bounds in the subdimensions as bounds of the first subcontainer
-        if (isFirstElementOf(subContainer, argument)) {
+        if (it == first) {
             std::copy(begin(subContainerBounds), end(subContainerBounds), begin(containerBounds)+1);
             continue;
         }
@@ -336,43 +381,100 @@ std::vector<size_t> bounds(const T& argument) {
     return containerBounds;
 }
 
+// Version for containers
+template <
+    template<typename> class CustomScalarTrait,
+    typename T,
+    typename std::enable_if<(false == IsScalar<CustomScalarTrait, T>::value), int>::type
+>
+std::vector<size_t> bounds(T const& argument) {
+    return bounds<CustomScalarTrait>(begin(argument), end(argument), size(argument));
+}
+
 // **************************************************************************
 // scalarSize
 // **************************************************************************
-/** \brief Returns the total number of scalar elements in a
- * \ingroup container_metrics
+/** \fn scalarSize(T const& argument);
+ * \brief Determines the number of scalar elements contained in the argument
+ * (or 1 is the argument is a scalar)
+ * \ingroup utility_functions
+ * \param CustomScalarTrait (trait template)
+ * \param argument the object whose number of scalar elements will be returned
  */
 
-// Specialization for scalar T
+/** \fn scalarSize(Iterator const first, Iterator const last, size_t precomputedDistance = NO_VALUE);
+ * \brief Determines the bounds of a range, i.e. its maximum
+ * size in all its subdimensions
+ * \ingroup utility_functions
+ * \param CustomScalarTrait (trait template)
+ * \param first, last the range whose number of scalar elements will be returned
+ * \param precomputedDistance (optional) the value of (last - first)
+ */
+
+// Version for scalars
 template <
     template<typename> class CustomScalarTrait = NoCustomScalars,
     typename T = void,
-    typename std::enable_if<IsScalar<CustomScalarTrait, T>::value, bool>::type = true
+    typename std::enable_if<(true == IsScalar<CustomScalarTrait, T>::value), long>::type = true
 >
-size_t scalarSize(const T& argument) {
+constexpr size_t scalarSize(T const& argument) {
     return 1;
 }
 
-// Specialization for non-scalar T
+// Forward-declare version for containers
 template <
     template<typename> class CustomScalarTrait = NoCustomScalars,
     typename T = void,
-    typename std::enable_if<!IsScalar<CustomScalarTrait, T>::value, int>::type = 0xDEADBEEF
+    typename std::enable_if<(false == IsScalar<CustomScalarTrait, T>::value), int>::type = 0xBEEF
 >
-size_t scalarSize(const T& argument) {
-    constexpr auto dimensionalityT = dimensionality<CustomScalarTrait>(argument);
+size_t scalarSize(const T& argument);
 
-    if (dimensionalityT == 1) return size(argument);
 
-    // assert(dimensionalityT >= 2);
+// Version for monolevel range
+template <
+    template<typename> class CustomScalarTrait = NoCustomScalars,
+    typename Iterator = void,
+    typename std::enable_if<
+        (true == IsScalar<CustomScalarTrait, typename std::iterator_traits<Iterator>::value_type>::value),
+        long
+    >::type = 0xBEEF
+>
+size_t scalarSize(Iterator const first, Iterator const last, size_t precomputedDistance = NO_VALUE) {
+    if (precomputedDistance != NO_VALUE) {
+        return precomputedDistance;
+    } else {
+        return static_cast<size_t>(std::distance(first, last));
+    }
+}
+
+// Version for multilevel range
+template <
+    template<typename> class CustomScalarTrait = NoCustomScalars,
+    typename Iterator = void,
+    typename std::enable_if<
+        (false == IsScalar<CustomScalarTrait, typename std::iterator_traits<Iterator>::value_type>::value),
+        int
+    >::type = 0xBEEF
+>
+size_t scalarSize(Iterator const first, Iterator const last, size_t precomputedDistance = NO_VALUE) {
     size_t result = 0;
 
-    size_t containerScalarSize = 0;
-    for (const auto& subContainer : argument) {
-        result += scalarSize<CustomScalarTrait>(subContainer);
+    size_t rangeScalarSize = 0;
+    for (auto it = first; it != last; ++it) {
+        result += scalarSize<CustomScalarTrait>(*it);
     }
 
     return result;
+}
+
+// Version for containers
+template <
+    template<typename> class CustomScalarTrait,
+    typename T,
+    typename std::enable_if<(false == IsScalar<CustomScalarTrait, T>::value), int>::type
+>
+size_t scalarSize(T const& argument) {
+    return scalarSize<CustomScalarTrait>(begin(argument), end(argument), size(argument));
 }
 
 
