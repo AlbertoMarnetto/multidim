@@ -115,6 +115,29 @@ private:
     mutable size_t cachedSize_ = NO_VALUE;
 };
 
+
+//***************************************************************************
+// makeFlatView
+//***************************************************************************
+/** \brief Factory method to build a FlatView of a container.
+ * \ingroup flat_view
+ * \param CustomScalarTrait (trait template)
+ * \param container the container on which the View will be based
+ */
+template <template<typename> class CustomScalarTrait = NoCustomScalars, typename Container = void>
+auto makeFlatView(Container& container) -> FlatView<CustomScalarTrait, decltype(begin(container))>  {
+    return FlatView<CustomScalarTrait, decltype(begin(container))>{begin(container), end(container)};
+}
+/** \brief Factory method to build a FlatView of a range
+ * \ingroup flat_view
+ * \param CustomScalarTrait : (trait template)
+ * \param first, last the range on which the View will be based
+ */
+template <template<typename> class CustomScalarTrait = NoCustomScalars, typename Iterator = void>
+auto makeFlatView(Iterator first, Iterator last) -> FlatView<CustomScalarTrait, Iterator>  {
+    return FlatView<CustomScalarTrait, Iterator>{first, last};
+}
+
 //***************************************************************************
 // FlatViewIterator
 //***************************************************************************
@@ -506,29 +529,6 @@ auto operator+(
     -> FlatViewIterator<CustomScalarTrait, RawIterator, isConstIterator>
 {
     return other + n;
-}
-
-
-//***************************************************************************
-// makeFlatView
-//***************************************************************************
-/** \brief Factory method to build a FlatView of a container.
- * \ingroup flat_view
- * \param CustomScalarTrait (trait template)
- * \param container the container on which the View will be based
- */
-template <template<typename> class CustomScalarTrait = NoCustomScalars, typename Container = void>
-auto makeFlatView(Container& container) -> FlatView<CustomScalarTrait, decltype(begin(container))>  {
-    return FlatView<CustomScalarTrait, decltype(begin(container))>{begin(container), end(container)};
-}
-/** \brief Factory method to build a FlatView of a range
- * \ingroup flat_view
- * \param CustomScalarTrait : (trait template)
- * \param first, last the range on which the View will be based
- */
-template <template<typename> class CustomScalarTrait = NoCustomScalars, typename T = void>
-auto makeFlatView(T first, T last) -> FlatView<CustomScalarTrait, T>  {
-    return FlatView<CustomScalarTrait, T>{first, last};
 }
 
 } // namespace multidim

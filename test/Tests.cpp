@@ -9,6 +9,7 @@
 #include "catch.hpp"
 
 #include "../FlatView.h"
+#include "../BoxedView.h"
 
 namespace md = multidim;
 using std::vector;
@@ -347,7 +348,49 @@ TEST_CASE( "Views", "[multidim]" ) {
             std::remove_if(begin(fv2), end(fv2), [](int n)->bool{return (n%2)==0;});
             CHECK((uriahFuller2[1]) == (vector<int>{1,3,5,}));
         }
+    }
+    SECTION("BoxedView") {
+        {
+            // Iterator operators
+            const vector<int> simple = {1,2,3,4,5,6};
 
+            auto fv = md::makeBoxedView(simple, 0);
+            auto it1 = fv.begin();
+
+            CHECK(*(it1) == 1);
+            ++it1;
+            CHECK(*(it1) == 2);
+            --it1;
+            CHECK(*(it1) == 1);
+
+            CHECK(it1[1] == 2);
+
+            auto it2 = it1++;
+            CHECK(*(it1) == 2);
+            CHECK(*(it2) == 1);
+            CHECK(it2 != it1);
+            CHECK((it2 == it1) == false);
+
+            auto it3 = it1--;
+            CHECK(*(it1) == 1);
+            CHECK(*(it3) == 2);
+
+            CHECK(it3 == (it1 + 1));
+            CHECK(it3 == (1 + it1));
+            CHECK(it1 == (it3 - 1));
+            CHECK((it3 - it1) == 1);
+            CHECK((it1 - it3) == -1);
+
+            it1 = fv.begin();
+            auto it0 = it1 - 1;
+            it2 = fv.end();
+            it3 = it2 - 1;
+            CHECK(it0 != it1);
+            CHECK(it0 != it2);
+            CHECK(it2 != it3);
+
+            decltype(fv)::const_iterator converted = fv.begin();
+        }
     }
 }
 

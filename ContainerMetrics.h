@@ -111,7 +111,7 @@ struct IsRange {
 template <typename T, bool = IsRange<T>::value>
 struct IteratorType;
 
-// Only defined if T is a range
+// Only defined if T supports `begin`
 template <typename T>
 struct IteratorType<T, true> {
     using type = decltype(begin(std::declval<T&>()));
@@ -254,7 +254,17 @@ struct Dimensionality<CustomScalarTrait, T, false> {
         >::value;
 };
 
-// Function version
+// Version for ranges
+template <
+    template<typename> class CustomScalarTrait = NoCustomScalars,
+    typename Iterator = void
+>
+struct DimensionalityRange {
+    static constexpr size_t value = 1+Dimensionality<CustomScalarTrait, typename std::iterator_traits<Iterator>::reference>::value;
+};
+
+
+// Function versions
 /** \brief Returns the dimensionality of the type of the argument
  * (or 0 if such type is a scalar)
  * \ingroup utility_functions
@@ -273,7 +283,7 @@ constexpr size_t dimensionality(T const& arg) {
  */
 template <template<typename> class CustomScalarTrait = NoCustomScalars, typename Iterator = void>
 constexpr size_t dimensionality(Iterator const& first, Iterator const& last) {
-    return 1+Dimensionality<CustomScalarTrait, decltype(*first)>::value;
+    return DimensionalityRange<CustomScalarTrait, Iterator>::value;
 }
 
 // **************************************************************************

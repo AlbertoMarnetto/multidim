@@ -110,7 +110,7 @@
 	<vector>
 	<assert.h>
 
-1450655286 source:d:\albi\c++\openautomation\lib\multidim\test\tests.cpp
+1450747475 source:d:\albi\c++\openautomation\lib\multidim\test\tests.cpp
 	<iostream>
 	<list>
 	<vector>
@@ -118,13 +118,18 @@
 	<iterator>
 	"catch.hpp"
 	"../FlatView.h"
+	"../BoxedView.h"
 
-1450655092 d:\albi\c++\openautomation\lib\multidim\flatview.h
+1450744317 d:\albi\c++\openautomation\lib\multidim\flatview.h
 	"ContainerMetrics.h"
 
-1450654501 d:\albi\c++\openautomation\lib\multidim\containermetrics.h
+1450746473 d:\albi\c++\openautomation\lib\multidim\containermetrics.h
 	<iterator>
 	<string>
 	<vector>
 	<type_traits>
+
+1450747789 d:\albi\c++\openautomation\lib\multidim\boxedview.h
+	"ContainerMetrics.h"
+	<cstring>
 
