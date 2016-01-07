@@ -55,10 +55,12 @@
 		<ResourceCompiler>
 			<Add directory="D:/CodeBlocks/wxWidgets-3.0.1/include" />
 		</ResourceCompiler>
+		<Unit filename="../Basics.h" />
 		<Unit filename="../BoxedView.h" />
-		<Unit filename="../ContainerMetrics.h" />
 		<Unit filename="../FlatView.h" />
-		<Unit filename="Tests.cpp" />
+		<Unit filename="Basics.cpp" />
+		<Unit filename="BoxedView.cpp" />
+		<Unit filename="FlatView.cpp" />
 		<Unit filename="catch.hpp" />
 		<Unit filename="main.cpp" />
 		<Extensions>

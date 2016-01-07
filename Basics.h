@@ -1,5 +1,5 @@
-#ifndef MULTIDIM_CONTAINER_METRICS_H
-#define MULTIDIM_CONTAINER_METRICS_H
+#ifndef MULTIDIM_BASICS_H
+#define MULTIDIM_BASICS_H
 
 #include <iterator> // begin, end
 #include <string> // DefaultCustomScalar, to_string
@@ -490,5 +490,5 @@ size_t scalarSize(T const& argument) {
 
 } // namespace multidim
 
-#endif // MULTIDIM_CONTAINER_METRICS_H
+#endif // MULTIDIM_BASICS_H
 

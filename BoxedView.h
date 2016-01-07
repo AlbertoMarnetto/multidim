@@ -1,10 +1,12 @@
-#include "ContainerMetrics.h"
+// TODO: il default element deve venire proxiato
+// TODO: conversione a container sottostante
+
+#include "Basics.h"
 #include <cstring> //memcmp
 namespace multidim {
 /** \addtogroup boxed_view BoxedView
  * \brief A class which makes a multilevel range appear as a C array
  * of user-defined bounds, cropping and filling as needed.
-
  */
 
 // **************************************************************************
@@ -219,7 +221,7 @@ public:
     using value_type = ChildIterator;
     using difference_type = ptrdiff_t;
     using pointer = value_type*;
-    using reference = value_type&;
+    using reference = value_type;
 
     // **************************************************************************
     // ctors
@@ -308,7 +310,7 @@ private:
         Forward
     ) :
         current_{first},
-        physicalBound_{static_cast<size_t>(std::distance(last-first))},
+        physicalBound_{static_cast<size_t>(std::distance(first, last))},
         apparentBounds_{apparentBounds},
         currentIndex_{0},
         defaultValue_{defaultValue}
@@ -320,7 +322,7 @@ private:
         Backward
     ) :
         current_{last},
-        physicalBound_{static_cast<size_t>(std::distance(last-first))},
+        physicalBound_{static_cast<size_t>(std::distance(first, last))},
         apparentBounds_{apparentBounds},
         currentIndex_{apparentBounds[0]},
         defaultValue_{defaultValue}
@@ -361,10 +363,10 @@ private:
         std::is_same<
             typename std::iterator_traits<RawIterator>::iterator_category,
             std::random_access_iterator_tag
-        >::value_type
+        >::value
     >
     auto advance(difference_type n) -> typename std::enable_if<rawIteratorIsRandomAccess, void>::type {
-        // We would are not requested to perform this check, but given the nature
+        // We would not be requested to perform this check, but given the nature
         // of this iterator, seems appropriate
         if (
                 (static_cast<difference_type>(currentIndex_) + n > static_cast<difference_type>(apparentBounds_[0]))
@@ -390,7 +392,7 @@ private:
         std::is_same<
             typename std::iterator_traits<RawIterator>::iterator_category,
             std::random_access_iterator_tag
-        >::value_type
+        >::value
     >
     auto advance(difference_type n) -> typename std::enable_if<false == rawIteratorIsRandomAccess, void>::type {
         if (n > 0) for (difference_type i = 0; i < n; ++i) ++(*this);
@@ -411,8 +413,7 @@ private:
         }
         return ChildIterator::makeBegin(
             begin(*current_), end(*current_),
-            apparentBounds_ + 1,  // will shift the bound lift forward
-            defaultValue_
+            defaultValue_, apparentBounds_ + 1  // will shift the bound lift forward
         );
     }
 
@@ -427,10 +428,10 @@ private:
 
 private: // members
     RawIterator   current_;
-    size_t        physicalBound_; // size of the undelying container
+    size_t        physicalBound_; // size of the underlying container
     size_t const* apparentBounds_; // size the user of the class will see (throug filling or cropping)
     size_t        currentIndex_;
-    ScalarType* const defaultValue_; // observer_ptr
+    ScalarType const* defaultValue_; // observer_ptr
 };
 
 // **************************************************************************
@@ -596,10 +597,10 @@ private:
         >::value
     >
     auto advance(difference_type n) -> typename std::enable_if<rawIteratorIsRandomAccess, void>::type {
-        // We would are not requested to perform this check, but given the nature
+        // We would not be requested to perform this check, but given the nature
         // of this iterator, seems appropriate
         if (
-                (static_cast<difference_type>(currentIndex_) + n > static_cast<difference_type>(apparentBounds_[0]))
+                (static_cast<difference_type>(currentIndex_) + n > static_cast<difference_type>(*apparentBounds_))
              || (static_cast<difference_type>(currentIndex_) + n < -1                )
         ) {
             throw std::runtime_error("BoxedViewIterator: access out of bounds (adv)");
