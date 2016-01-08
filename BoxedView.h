@@ -1,5 +1,5 @@
-// TODO: il default element deve venire proxiato
-// TODO: conversione a container sottostante
+// TODO: apparentBounds should be a generic iterator
+// TODO: begin() and end()
 
 #include "Basics.h"
 #include <cstring> //memcmp
@@ -10,7 +10,7 @@ namespace multidim {
  */
 
 // **************************************************************************
-// Forward declaration of BoxedViewIterator
+// Forward declarations
 /** \brief The iterator used in BoxedView. Unfortunately, it is not
  * a "proper" iterator, since it is proxied
  *  \ingroup boxed_view
@@ -20,7 +20,8 @@ template <
     typename RawIterator,
     bool isConstIterator,
     size_t dimensionality
-> class BoxedViewIterator;
+>
+class BoxedViewIterator;
 
 // n + iterator
 template <template<typename> class CustomScalarTrait, typename RawIterator, bool isConstIterator, size_t dimensionality>
@@ -28,6 +29,13 @@ auto operator+(
         typename BoxedViewIterator<CustomScalarTrait, RawIterator, isConstIterator, dimensionality>::difference_type n,
         const BoxedViewIterator<CustomScalarTrait, RawIterator, isConstIterator, dimensionality>& other)
     -> BoxedViewIterator<CustomScalarTrait, RawIterator, isConstIterator, dimensionality>;
+
+/** \brief Proxy class representing a reference to a (possibly defaulted)
+ *  scalar value. Plays the same role as vector<bool>::reference
+ *  \ingroup boxed_view
+ */
+template <typename RawIterator, bool isConstProxy>
+class BoxedViewScalarProxy;
 
 // **************************************************************************
 
@@ -194,18 +202,53 @@ auto makeBoxedView(Iterator first, Iterator last, ScalarValue&& defaultValue, si
         (first, last, std::forward<ScalarValue>(defaultValue), apparentBounds);
 }
 
+
+//***************************************************************************
+// BoxedViewScalarProxy
+//***************************************************************************
+/** \brief Proxy class representing a reference to a (possibly defaulted)
+ *  scalar value. Plays the same role as vector<bool>::reference
+ *  \ingroup boxed_view
+ */
+template <typename RawIterator, bool isConstProxy>
+class BoxedViewScalarProxy {
+    using RawScalarType = typename std::iterator_traits<RawIterator>::value_type;
+    using ConstScalarType = typename std::add_const<RawScalarType>::type;
+    using ScalarType = typename std::conditional<isConstProxy, ConstScalarType, RawScalarType>::type;
+
+public:
+    BoxedViewScalarProxy(RawIterator target, ScalarType const* defaultValue, bool valid) :
+        target_{target},
+        defaultValue_{defaultValue},
+        valid_{valid} {}
+
+    BoxedViewScalarProxy& operator=(const ScalarType& rhs) {
+        if (target_) *target_ = rhs;
+        return *this;
+    }
+
+    operator ScalarType() const {
+        if (valid_)
+            return *target_;
+        else
+            return *defaultValue_;
+    }
+
+private: // members
+    RawIterator target_;
+    ScalarType const* defaultValue_;
+    bool valid_;
+};
+
 //***************************************************************************
 // BoxedViewIterator
 //***************************************************************************
 // Specialization for RawIterator pointing to a subcontainer
 // Precondition: apparentBounds_ must be an array of at least `dimensionality_` elements
 
-// **************************************************************************
-// specialization for dimensionality_ > 1
-template <template<typename> class CustomScalarTrait, typename RawIterator, bool isConstIterator, size_t dimensionality_ /*!= 1*/>
-class BoxedViewIterator {
-    constexpr static const size_t nullBounds_[dimensionality_] = {0};
-public:
+// typedefs for dimensionality_ > 1
+template <template<typename> class CustomScalarTrait, typename RawIterator, bool isConstIterator, size_t dimensionality_>
+struct BoxedViewIteratorTraits {
     using RawScalarType = typename IteratorScalarType<CustomScalarTrait, RawIterator>::type;
     using ConstScalarType = typename std::add_const<RawScalarType>::type;
     using ScalarType = typename std::conditional<isConstIterator, ConstScalarType, RawScalarType>::type;
@@ -213,15 +256,41 @@ public:
     using ChildRawIterator = typename IteratorType<typename std::iterator_traits<RawIterator>::reference>::type;
     using ChildIterator = BoxedViewIterator<CustomScalarTrait, ChildRawIterator, isConstIterator, dimensionality_ - 1>;
 
-//    using RawValueType = typename std::iterator_traits<RawIterator>::value_type;
-//    using ConstValueType = typename std::add_const<RawValueType>::type;
+    // [iterator.traits]
+    using value_type = ChildIterator;
+    using pointer = value_type*;
+    using reference = value_type;
+};
+
+// typedefs for dimensionality_ == 1
+template <template<typename> class CustomScalarTrait, typename RawIterator, bool isConstIterator>
+struct BoxedViewIteratorTraits<CustomScalarTrait, RawIterator, isConstIterator, /*dimensionality_*/ 1> {
+    using RawScalarType = typename IteratorScalarType<CustomScalarTrait, RawIterator>::type;
+    using ConstScalarType = typename std::add_const<RawScalarType>::type;
+    using ScalarType = typename std::conditional<isConstIterator, ConstScalarType, RawScalarType>::type;
+
+    using ScalarProxy = BoxedViewScalarProxy<RawIterator, isConstIterator>;
+
+    // [iterator.traits]
+    using value_type = ScalarType;
+    using pointer = ScalarProxy;
+    using reference = ScalarProxy;
+};
+
+
+template <template<typename> class CustomScalarTrait, typename RawIterator, bool isConstIterator, size_t dimensionality_>
+class BoxedViewIterator {
+    constexpr static const size_t nullBounds_[dimensionality_] = {0};
+public:
+    using Traits = BoxedViewIteratorTraits<CustomScalarTrait, RawIterator, isConstIterator, dimensionality_>;
+    using ScalarType = typename Traits::ScalarType;
 
     // [iterator.traits]
     using iterator_category = std::random_access_iterator_tag;
-    using value_type = ChildIterator;
+    using value_type = typename Traits::value_type;
     using difference_type = ptrdiff_t;
-    using pointer = value_type*;
-    using reference = value_type;
+    using pointer = typename Traits::pointer;     // Child iterator is dimensionality_ > 1, proxy class if == 1
+    using reference = typename Traits::reference; // Child iterator is dimensionality_ > 1, proxy class if == 1
 
     // **************************************************************************
     // ctors
@@ -238,14 +307,14 @@ public:
 
     static BoxedViewIterator makeBegin(
         RawIterator first, RawIterator last,
-        ScalarType* defaultValue, size_t const* apparentBounds)
+        ScalarType const* defaultValue, size_t const* apparentBounds)
     {
         return BoxedViewIterator<CustomScalarTrait, RawIterator, isConstIterator, dimensionality_>
             {first, last, defaultValue, apparentBounds, Forward{}};
     }
     static BoxedViewIterator makeEnd(
         RawIterator first, RawIterator last,
-        ScalarType* defaultValue, size_t const* apparentBounds)
+        ScalarType const* defaultValue, size_t const* apparentBounds)
     {
         return BoxedViewIterator<CustomScalarTrait, RawIterator, isConstIterator, dimensionality_>
             {first, last, defaultValue, apparentBounds, Backward{}};
@@ -395,26 +464,58 @@ private:
         >::value
     >
     auto advance(difference_type n) -> typename std::enable_if<false == rawIteratorIsRandomAccess, void>::type {
+        // Error checking is delegated to increment() and decrement()
         if (n > 0) for (difference_type i = 0; i < n; ++i) ++(*this);
         if (n < 0) for (difference_type i = 0; i > n; --i) --(*this);
     }
 
     // **************************************************************************
     difference_type distance_to(const BoxedViewIterator& other) const {
-        return std::distance(*this.current_, other.current_);
+        return std::distance(this->current_, other.current_);
     }
 
-    reference dereference() const {
+    // **************************************************************************
+    // dereference - Version for dimensionality_ > 1
+    // returns a BoxedViewIterator to the subcontainer
+    template<bool hasSubRange = (dimensionality_ > 1)>
+    auto dereference() const -> typename std::enable_if<true == hasSubRange, reference>::type
+    {
         if (
                 (currentIndex_ == ONE_BEFORE_THE_FIRST)
              || (currentIndex_ == apparentBounds_[0])
         ) {
             throw std::runtime_error("BoxedViewIterator: access out of bounds");
         }
-        return ChildIterator::makeBegin(
-            begin(*current_), end(*current_),
-            defaultValue_, apparentBounds_ + 1  // will shift the bound lift forward
-        );
+        if (currentIndex_ < physicalBound_) {
+            return reference::makeBegin(
+                begin(*current_), end(*current_),
+                defaultValue_, apparentBounds_ + 1  // will shift the bound list forward
+            );
+        } else {
+            using ChildRawIterator = typename Traits::ChildRawIterator;
+            return reference::makeBegin(
+                ChildRawIterator{}, ChildRawIterator{},
+                defaultValue_, apparentBounds_ + 1  // will shift the bound list forward
+            );
+        }
+    }
+
+    // dereference - Version for dimensionality_ == 1
+    // returns a proxy to the value
+    template<bool hasSubRange = (dimensionality_ > 1)>
+    auto dereference() const -> typename std::enable_if<false == hasSubRange, reference>::type
+    {
+        if (
+                (currentIndex_ == ONE_BEFORE_THE_FIRST)
+             || (currentIndex_ == apparentBounds_[0])
+        ) {
+            throw std::runtime_error("BoxedViewIterator: access out of bounds");
+        }
+        if (currentIndex_ < physicalBound_) {
+            return reference{current_, defaultValue_, true};
+        } else {
+            return reference{current_, defaultValue_, false};
+        }
     }
 
     bool equal(const BoxedViewIterator& other) const {
@@ -434,233 +535,6 @@ private: // members
     ScalarType const* defaultValue_; // observer_ptr
 };
 
-// **************************************************************************
-// specialization for dimensionality_ == 1
-template <template<typename> class CustomScalarTrait, typename RawIterator, bool isConstIterator>
-class BoxedViewIterator<CustomScalarTrait, RawIterator, isConstIterator, /*dimensionality_*/ 1>  {
-    constexpr static const size_t nullBounds_[1] = {0};
-public:
-    using RawScalarType = typename IteratorScalarType<CustomScalarTrait, RawIterator>::type;
-    using ConstScalarType = typename std::add_const<RawScalarType>::type;
-    using ScalarType = typename std::conditional<isConstIterator, ConstScalarType, RawScalarType>::type;
-
-    using RawReferenceType = typename IteratorScalarType<CustomScalarTrait, RawIterator>::reference;
-    using ConstReferenceType = typename std::add_const<RawReferenceType>::type;
-
-    // [iterator.traits]
-    using iterator_category = std::random_access_iterator_tag;
-    using value_type = ScalarType;
-    using difference_type = ptrdiff_t;
-    using pointer = ScalarType*;
-    using reference = typename std::conditional<isConstIterator, ConstReferenceType, RawReferenceType>::type;
-
-    // **************************************************************************
-    // ctors
-    // **************************************************************************
-    BoxedViewIterator() :
-        current_{nullptr},
-        physicalBound_{0}, apparentBounds_{nullBounds_}, currentIndex_{0},
-        defaultValue_{nullptr}
-        {}
-    /* \brief Default constructor. */
-
-    BoxedViewIterator(const BoxedViewIterator&) = default;
-    /* \brief Copy constructor. Note that BoxedViewIterator is TriviallyCopyable */
-
-    static BoxedViewIterator makeBegin(
-        RawIterator first, RawIterator last,
-        ScalarType const* defaultValue, size_t const* apparentBounds)
-    {
-        return BoxedViewIterator<CustomScalarTrait, RawIterator, isConstIterator, 1>
-            {first, last, defaultValue, apparentBounds, Forward{}};
-    }
-    static BoxedViewIterator makeEnd(
-        RawIterator first, RawIterator last,
-        ScalarType const* defaultValue, size_t const* apparentBounds)
-    {
-        return BoxedViewIterator<CustomScalarTrait, RawIterator, isConstIterator, 1>
-            {first, last, defaultValue, apparentBounds, Backward{}};
-    }
-
-    // conversion to const_iterator
-    template<bool _isConstIterator = isConstIterator>
-    BoxedViewIterator(BoxedViewIterator<CustomScalarTrait, RawIterator, false, 1> other,
-                     typename std::enable_if<_isConstIterator,int>::type* = nullptr) :
-        current_{other.current_},
-        physicalBound_{other.physicalBound_},
-        apparentBounds_{other.apparentBounds_},
-        currentIndex_{other.currentIndex_},
-        defaultValue_{other.defaultValue_}
-    {}
-
-    // **************************************************************************
-    // Standard members
-    // **************************************************************************
-    // [iterator.iterators]
-    reference operator*() const {return dereference();}
-    BoxedViewIterator& operator++() {increment(); return *this;}
-
-    // [input.iterators] and [output.iterators]
-    bool operator==(const BoxedViewIterator& other) const {return equal(other);}
-    bool operator!=(const BoxedViewIterator& other) const {return !((*this) == other);}
-    pointer operator->() const {return &(**this);}
-    BoxedViewIterator operator++(int) {auto tmp = *this; ++(*this); return tmp;}
-
-    // [bidirectional.iterators]
-    BoxedViewIterator& operator--() {decrement(); return *this;}
-    BoxedViewIterator operator--(int) {auto other = *this; --(*this); return other;}
-
-    // [random.access.iterators]
-    BoxedViewIterator& operator+=(difference_type n) {advance(n); return *this;}
-    BoxedViewIterator operator+(difference_type n) const {auto result = (*this); result += n; return result;}
-    template <template<typename> class, typename, bool>
-    friend BoxedViewIterator operator+(difference_type n, const BoxedViewIterator& other);
-    BoxedViewIterator& operator-=(difference_type n) {return (*this += (-n));}
-    BoxedViewIterator operator-(difference_type n) const {return (*this + (-n));}
-
-    difference_type operator-(const BoxedViewIterator& other) const {return other.distance_to(*this);}
-    bool operator<(const BoxedViewIterator& other) const {return (other - *this) > 0;}
-    bool operator>(const BoxedViewIterator& other) const {return (other - *this) < 0;}
-    bool operator>=(const BoxedViewIterator& other) const {return !((*this) < other);}
-    bool operator<=(const BoxedViewIterator& other) const {return !((*this) > other);}
-
-    reference operator[](difference_type n) const {return *(*this + n);}
-
-    // **************************************************************************
-
-private:
-    // needed for conversion to const_iterator
-    friend class BoxedViewIterator<CustomScalarTrait, RawIterator, true, true>;
-
-    // **************************************************************************
-    // private ctors
-    // **************************************************************************
-    BoxedViewIterator(
-        RawIterator first, RawIterator last,
-        ScalarType const* defaultValue, size_t const* apparentBounds,
-        Forward
-    ) :
-        current_{first},
-        physicalBound_{static_cast<size_t>(std::distance(first,last))},
-        apparentBounds_{apparentBounds},
-        currentIndex_{0},
-        defaultValue_{defaultValue}
-    {}
-
-    BoxedViewIterator(
-        RawIterator first, RawIterator last,
-        ScalarType const* defaultValue, size_t const* apparentBounds,
-        Backward
-    ) :
-        current_{last},
-        physicalBound_{static_cast<size_t>(std::distance(first,last))},
-        apparentBounds_{apparentBounds},
-        currentIndex_{apparentBounds[0]},
-        defaultValue_{defaultValue}
-    {}
-
-
-    // **************************************************************************
-    // Basic operations, on the model of Boost's iterator_facade
-    // **************************************************************************
-    static constexpr size_t ONE_BEFORE_THE_FIRST = static_cast<size_t>(-1);
-
-    void increment() {
-        // We would are not requested to perform this check, but given the nature
-        // of this iterator, seems appropriate
-        if (currentIndex_ == apparentBounds_[0])
-            throw std::runtime_error("BoxedViewIterator: access out of bounds");
-
-        if (currentIndex_ < physicalBound_) ++current_;
-        ++currentIndex_;
-    }
-
-    void decrement() {
-        // We would are not requested to perform this check, but given the nature
-        // of this iterator, seems appropriate
-        if (currentIndex_ == ONE_BEFORE_THE_FIRST)
-            throw std::runtime_error("BoxedViewIterator: access out of bounds");
-
-        if (currentIndex_ > 0 && currentIndex_ <= physicalBound_) --current_;
-        --currentIndex_;
-        // Note: if the old currentIndex_ was == 0,
-        // it will assume value ONE_BEFORE_THE_FIRST
-    }
-
-    // **************************************************************************
-    // advance - Version if the underlying raw iterator
-    // supports random access
-    template<bool rawIteratorIsRandomAccess =
-        std::is_same<
-            typename std::iterator_traits<RawIterator>::iterator_category,
-            std::random_access_iterator_tag
-        >::value
-    >
-    auto advance(difference_type n) -> typename std::enable_if<rawIteratorIsRandomAccess, void>::type {
-        // We would not be requested to perform this check, but given the nature
-        // of this iterator, seems appropriate
-        if (
-                (static_cast<difference_type>(currentIndex_) + n > static_cast<difference_type>(*apparentBounds_))
-             || (static_cast<difference_type>(currentIndex_) + n < -1                )
-        ) {
-            throw std::runtime_error("BoxedViewIterator: access out of bounds (adv)");
-        }
-
-        if (currentIndex_ + n > physicalBound_) { // over the upper bound
-            current_ += (physicalBound_ - currentIndex_);
-        } else if (currentIndex_ + n < 0) {  // under to lower bound (==0)
-            current_ -= currentIndex_;
-        } else {
-            current_ += n;
-        }
-
-        currentIndex_ += n;
-    }
-
-    // advance - Version if the underlying raw iterator
-    // does not support random access
-    template<bool rawIteratorIsRandomAccess =
-        std::is_same<
-            typename std::iterator_traits<RawIterator>::iterator_category,
-            std::random_access_iterator_tag
-        >::value
-    >
-    auto advance(difference_type n) -> typename std::enable_if<false == rawIteratorIsRandomAccess, void>::type {
-        if (n > 0) for (difference_type i = 0; i < n; ++i) ++(*this);
-        if (n < 0) for (difference_type i = 0; i > n; --i) --(*this);
-    }
-
-    // **************************************************************************
-    difference_type distance_to(const BoxedViewIterator& other) const {
-        return std::distance(current_, other.current_);
-    }
-
-    reference dereference() const {
-        if (
-                (currentIndex_ == ONE_BEFORE_THE_FIRST)
-             || (currentIndex_ == apparentBounds_[0])
-        ) {
-            throw std::runtime_error("BoxedViewIterator: access out of bounds");
-        }
-        return *current_;
-    }
-
-    bool equal(const BoxedViewIterator& other) const {
-        return (current_ == other.current_)
-            && (physicalBound_ == other.physicalBound_)
-            && (std::memcmp(apparentBounds_, other.apparentBounds_, 1*sizeof(*apparentBounds_)) == 0)
-            && (currentIndex_ == other.currentIndex_)
-            && (*defaultValue_ == *other.defaultValue_);
-    }
-
-
-private: // members
-    RawIterator   current_;
-    size_t        physicalBound_; // size of the undelying container
-    size_t const* apparentBounds_; // size the user of the class will see (throug filling or cropping)
-    size_t        currentIndex_;
-    ScalarType const* defaultValue_; // observer_ptr
-};
 
 // **************************************************************************
 

@@ -75,7 +75,6 @@ TEST_CASE( "BoxedView", "[multidim]" ) {
         decltype(bv)::const_iterator converted = bv.begin();
     }
     SECTION("Iteration 2") {
-
         const vector<vector<int>> uriahFuller = {{},{1,2,3,},{4},{},{},{5,6}};
 
         auto bv = md::makeBoxedView(uriahFuller, 0);
@@ -113,8 +112,18 @@ TEST_CASE( "BoxedView", "[multidim]" ) {
         CHECK(it0 != it2);
         CHECK(it2 != it3);
     }
-    SECTION("Iteration 3") {
-        int test1[2][3] = {{1,2,3,},{4,5,6},};
-        for (auto it1 = std::begin(test1[0]); it1 < std::end(test1[0]); ++it1) std::cout << *it1;
+    SECTION("Physical and apparent limits") {
+        const vector<vector<int>> uriahFuller = {{},{1,2,3,},{4},{},{},{5,6}};
+
+        auto bv = md::makeBoxedView(uriahFuller, 42);  // bv appears as a int[6][3]
+        auto it = bv[2];
+
+        CHECK(*(it) == 4);
+        ++it; // it is now bv[2][1], points to a defaulted value
+        CHECK(*(it) == 42);
+        ++it; // it is now bv[2][2], points to a defaulted value
+        CHECK(*(it) == 42);
+        ++it; // it is now bv[2][3], must throw since is out of the apparent bounds
+        CHECK_THROWS(*it);
     }
 }
