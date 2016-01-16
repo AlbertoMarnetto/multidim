@@ -1,8 +1,7 @@
-// TODO: apparentBounds should be a generic iterator
 // TODO: begin() and end()
 
 #include "Basics.h"
-#include <cstring> //memcmp
+
 namespace multidim {
 /** \addtogroup boxed_view BoxedView
  * \brief A class which makes a multilevel range appear as a C array
@@ -155,29 +154,6 @@ private:
 //***************************************************************************
 // makeBoxedView
 //***************************************************************************
-/** \brief Factory method to build a BoxedView of a container.
- * \ingroup flat_view
- * \param CustomScalarTrait (trait template)
- * \param container the container on which the View will be based
- */
-template <
-    template<typename> class CustomScalarTrait = NoCustomScalars,
-    typename Container = void,
-    typename ScalarValue = void
->
-auto makeBoxedView(Container& container, ScalarValue&& defaultValue, size_t const* apparentBounds = nullptr)
-    -> BoxedView<CustomScalarTrait, decltype(begin(container)), Dimensionality<CustomScalarTrait, Container>::value>
-{
-    if (apparentBounds ==  nullptr) {
-        auto containerBounds = bounds<CustomScalarTrait>(container);
-        apparentBounds = &containerBounds[0];
-        return BoxedView<CustomScalarTrait, decltype(begin(container)), dimensionality(container)>
-            (begin(container), end(container), std::forward<ScalarValue>(defaultValue), apparentBounds);
-    }
-
-    return BoxedView<CustomScalarTrait, decltype(begin(container)), dimensionality(container)>
-        (begin(container), end(container), std::forward<ScalarValue>(defaultValue), apparentBounds);
-}
 /** \brief Factory method to build a BoxedView of a range
  * \ingroup flat_view
  * \param CustomScalarTrait : (trait template)
@@ -186,21 +162,80 @@ auto makeBoxedView(Container& container, ScalarValue&& defaultValue, size_t cons
 template <
     template<typename> class CustomScalarTrait = NoCustomScalars,
     typename Iterator = void,
-    typename ScalarValue = void
+    typename ScalarValue = void,
+    typename BoundsContainer = void
 >
-auto makeBoxedView(Iterator first, Iterator last, ScalarValue&& defaultValue, size_t const* apparentBounds = nullptr)
+auto makeBoxedView(Iterator first, Iterator last, ScalarValue&& defaultValue, const BoundsContainer& apparentBounds)
     -> BoxedView<CustomScalarTrait, Iterator, DimensionalityRange<CustomScalarTrait, Iterator>::value>
 {
-    if (apparentBounds ==  nullptr) {
+    using std::begin;
+    if (begin(apparentBounds) ==  end(apparentBounds)) {
         auto containerBounds = bounds<CustomScalarTrait>(first, last);
-        apparentBounds = &containerBounds[0];
         return BoxedView<CustomScalarTrait, Iterator, dimensionality(first, last)>
-            (first, last, std::forward<ScalarValue>(defaultValue), apparentBounds);
+            (first, last, std::forward<ScalarValue>(defaultValue), begin(containerBounds));
     }
 
+    if (std::distance(begin(apparentBounds), end(apparentBounds)) != dimensionality(first, last))
+        throw std::runtime_error("makeBoxedView : limit list has false size");
+
     return BoxedView<CustomScalarTrait, Iterator, dimensionality(first, last)>
-        (first, last, std::forward<ScalarValue>(defaultValue), apparentBounds);
+        (first, last, std::forward<ScalarValue>(defaultValue), begin(apparentBounds));
 }
+
+// The same, with a initializer list
+template <
+    template<typename> class CustomScalarTrait = NoCustomScalars,
+    typename Iterator = void,
+    typename ScalarValue = void
+>
+auto makeBoxedView(Iterator first, Iterator last, ScalarValue&& defaultValue, std::initializer_list<size_t> apparentBounds)
+    -> BoxedView<CustomScalarTrait, Iterator, DimensionalityRange<CustomScalarTrait, Iterator>::value>
+{
+    using std::begin;
+    if (begin(apparentBounds) == end(apparentBounds)) {
+        auto containerBounds = bounds<CustomScalarTrait>(first, last);
+        return BoxedView<CustomScalarTrait, Iterator, dimensionality(first, last)>
+            (first, last, std::forward<ScalarValue>(defaultValue), begin(containerBounds));
+    }
+
+    if (std::distance(begin(apparentBounds), end(apparentBounds)) != dimensionality(first, last))
+        throw std::runtime_error("makeBoxedView : limit list has false size");
+
+    return BoxedView<CustomScalarTrait, Iterator, dimensionality(first, last)>
+        (first, last, std::forward<ScalarValue>(defaultValue), begin(apparentBounds));
+}
+
+/** \brief Factory method to build a BoxedView of a container
+ *  (delegates to the range.based version)
+ * \ingroup flat_view
+ * \param CustomScalarTrait (trait template)
+ * \param container the container on which the View will be based
+ */
+template <
+    template<typename> class CustomScalarTrait = NoCustomScalars,
+    typename Container = void,
+    typename ScalarValue = void,
+    typename BoundsContainer = void
+>
+auto makeBoxedView(Container& container, ScalarValue&& defaultValue, const BoundsContainer& apparentBounds)
+    -> BoxedView<CustomScalarTrait, decltype(begin(container)), Dimensionality<CustomScalarTrait, Container>::value>
+{
+    return makeBoxedView(begin(container), end(container), std::forward<ScalarValue>(defaultValue), apparentBounds);
+}
+
+// The same, with a initializer list
+template <
+    template<typename> class CustomScalarTrait = NoCustomScalars,
+    typename Container = void,
+    typename ScalarValue = void
+>
+auto makeBoxedView(Container& container, ScalarValue&& defaultValue, std::initializer_list<size_t> apparentBounds)
+    -> BoxedView<CustomScalarTrait, decltype(begin(container)), Dimensionality<CustomScalarTrait, Container>::value>
+{
+    return makeBoxedView(begin(container), end(container), std::forward<ScalarValue>(defaultValue), apparentBounds);
+}
+
+
 
 
 //***************************************************************************
@@ -223,7 +258,7 @@ public:
         valid_{valid} {}
 
     BoxedViewScalarProxy& operator=(const ScalarType& rhs) {
-        if (target_) *target_ = rhs;
+        if (valid_) *target_ = rhs;
         return *this;
     }
 
@@ -241,10 +276,8 @@ private: // members
 };
 
 //***************************************************************************
-// BoxedViewIterator
+// BoxedViewIteratorTraits
 //***************************************************************************
-// Specialization for RawIterator pointing to a subcontainer
-// Precondition: apparentBounds_ must be an array of at least `dimensionality_` elements
 
 // typedefs for dimensionality_ > 1
 template <template<typename> class CustomScalarTrait, typename RawIterator, bool isConstIterator, size_t dimensionality_>
@@ -277,6 +310,11 @@ struct BoxedViewIteratorTraits<CustomScalarTrait, RawIterator, isConstIterator, 
     using reference = ScalarProxy;
 };
 
+//***************************************************************************
+// BoxedViewIterator
+//***************************************************************************
+// Specialization for RawIterator pointing to a subcontainer
+// Precondition: apparentBounds_ must be an array of at least `dimensionality_` elements
 
 template <template<typename> class CustomScalarTrait, typename RawIterator, bool isConstIterator, size_t dimensionality_>
 class BoxedViewIterator {
@@ -297,7 +335,7 @@ public:
     // **************************************************************************
     BoxedViewIterator() :
         current_{nullptr},
-        physicalBound_{0}, apparentBounds_{nullBounds_}, currentIndex_{0},
+        physicalBound_{0}, apparentBounds_{nullBounds_}, index_{0},
         defaultValue_{nullptr}
         {}
     /* \brief Default constructor. */
@@ -327,7 +365,7 @@ public:
         current_{other.current_},
         physicalBound_{other.physicalBound_},
         apparentBounds_{other.apparentBounds_},
-        currentIndex_{other.currentIndex_},
+        index_{other.index_},
         defaultValue_{other.defaultValue_}
     {}
 
@@ -365,7 +403,14 @@ public:
     reference operator[](difference_type n) const {return *(*this + n);}
 
     // **************************************************************************
-
+    // Not part of the "iterator interface", but since we want to emulate a C array
+    // they must be provided
+    friend BoxedViewIterator begin(const BoxedViewIterator& it) {
+        return it - it.index_;
+    }
+    friend BoxedViewIterator end(const BoxedViewIterator& it) {
+        return it + (it.apparentBounds_[0] - it.index_);
+    }
 private:
     // needed for conversion to const_iterator
     friend class BoxedViewIterator<CustomScalarTrait, RawIterator, true, true>;
@@ -381,7 +426,7 @@ private:
         current_{first},
         physicalBound_{static_cast<size_t>(std::distance(first, last))},
         apparentBounds_{apparentBounds},
-        currentIndex_{0},
+        index_{0},
         defaultValue_{defaultValue}
     {}
 
@@ -393,9 +438,22 @@ private:
         current_{last},
         physicalBound_{static_cast<size_t>(std::distance(first, last))},
         apparentBounds_{apparentBounds},
-        currentIndex_{apparentBounds[0]},
+        index_{apparentBounds[0]},
         defaultValue_{defaultValue}
-    {}
+    {
+        if (apparentBounds[0] < physicalBound_) {
+            // in this case, current_ points to the wrong place
+            // (i.e. to the physical end of the container
+            // insted of the end of the view)
+            // and must be corrected
+            size_t currentIndex_ = physicalBound_;
+            while (currentIndex_ > apparentBounds[0]) {
+                --current_;
+                --currentIndex_;
+            }
+            // TODO: overload for random access oterators
+        }
+    }
 
 
     // **************************************************************************
@@ -406,22 +464,22 @@ private:
     void increment() {
         // We were not requested to perform this check, but given the nature
         // of this iterator, seems appropriate
-        if (currentIndex_ == apparentBounds_[0])
+        if (index_ == apparentBounds_[0])
             throw std::runtime_error("BoxedViewIterator: access out of bounds");
 
-        if (currentIndex_ < physicalBound_) ++current_;
-        ++currentIndex_;
+        if (index_ < physicalBound_) ++current_;
+        ++index_;
     }
 
     void decrement() {
         // We would are not requested to perform this check, but given the nature
         // of this iterator, seems appropriate
-        if (currentIndex_ == ONE_BEFORE_THE_FIRST)
+        if (index_ == ONE_BEFORE_THE_FIRST)
             throw std::runtime_error("BoxedViewIterator: access out of bounds");
 
-        if (currentIndex_ > 0 && currentIndex_ <= physicalBound_) --current_;
-        --currentIndex_;
-        // Note: if the old currentIndex_ was == 0,
+        if (index_ > 0 && index_ <= physicalBound_) --current_;
+        --index_;
+        // Note: if the old index_ was == 0,
         // it will assume value ONE_BEFORE_THE_FIRST
     }
 
@@ -438,21 +496,21 @@ private:
         // We would not be requested to perform this check, but given the nature
         // of this iterator, seems appropriate
         if (
-                (static_cast<difference_type>(currentIndex_) + n > static_cast<difference_type>(apparentBounds_[0]))
-             || (static_cast<difference_type>(currentIndex_) + n < -1                )
+                (static_cast<difference_type>(index_) + n > static_cast<difference_type>(apparentBounds_[0]))
+             || (static_cast<difference_type>(index_) + n < -1                )
         ) {
             throw std::runtime_error("BoxedViewIterator: access out of bounds");
         }
 
-        if (currentIndex_ + n > physicalBound_) { // over the upper bound
-            current_ += (physicalBound_ - currentIndex_);
-        } else if (currentIndex_ + n < 0) {  // under to lower bound (==0)
-            current_ -= currentIndex_;
+        if (index_ + n > physicalBound_) { // over the upper bound
+            current_ += (physicalBound_ - index_);
+        } else if (index_ + n < 0) {  // under to lower bound (==0)
+            current_ -= index_;
         } else {
             current_ += n;
         }
 
-        currentIndex_ += n;
+        index_ += n;
     }
 
     // advance - Version if the underlying raw iterator
@@ -471,7 +529,16 @@ private:
 
     // **************************************************************************
     difference_type distance_to(const BoxedViewIterator& other) const {
-        return std::distance(this->current_, other.current_);
+        return
+            std::distance(this->current_, other.current_) -
+            (
+                (index_ > physicalBound_) ?
+                    (index_ - physicalBound_) : 0
+            ) +
+            (
+                (other.index_ > other.physicalBound_) ?
+                    (other.index_ - other.physicalBound_) : 0
+            );
     }
 
     // **************************************************************************
@@ -481,12 +548,12 @@ private:
     auto dereference() const -> typename std::enable_if<true == hasSubRange, reference>::type
     {
         if (
-                (currentIndex_ == ONE_BEFORE_THE_FIRST)
-             || (currentIndex_ == apparentBounds_[0])
+                (index_ == ONE_BEFORE_THE_FIRST)
+             || (index_ == apparentBounds_[0])
         ) {
             throw std::runtime_error("BoxedViewIterator: access out of bounds");
         }
-        if (currentIndex_ < physicalBound_) {
+        if (index_ < physicalBound_) {
             return reference::makeBegin(
                 begin(*current_), end(*current_),
                 defaultValue_, apparentBounds_ + 1  // will shift the bound list forward
@@ -506,12 +573,12 @@ private:
     auto dereference() const -> typename std::enable_if<false == hasSubRange, reference>::type
     {
         if (
-                (currentIndex_ == ONE_BEFORE_THE_FIRST)
-             || (currentIndex_ == apparentBounds_[0])
+                (index_ == ONE_BEFORE_THE_FIRST)
+             || (index_ == apparentBounds_[0])
         ) {
             throw std::runtime_error("BoxedViewIterator: access out of bounds");
         }
-        if (currentIndex_ < physicalBound_) {
+        if (index_ < physicalBound_) {
             return reference{current_, defaultValue_, true};
         } else {
             return reference{current_, defaultValue_, false};
@@ -521,8 +588,10 @@ private:
     bool equal(const BoxedViewIterator& other) const {
         return (current_ == other.current_)
             && (physicalBound_ == other.physicalBound_)
-            && (std::memcmp(apparentBounds_, other.apparentBounds_, dimensionality_*sizeof(*apparentBounds_)) == 0)
-            && (currentIndex_ == other.currentIndex_)
+            && (std::equal(apparentBounds_, apparentBounds_+dimensionality_,
+                    other.apparentBounds_)
+                )
+            && (index_ == other.index_)
             && (*defaultValue_ == *other.defaultValue_);
     }
 
@@ -531,7 +600,7 @@ private: // members
     RawIterator   current_;
     size_t        physicalBound_; // size of the underlying container
     size_t const* apparentBounds_; // size the user of the class will see (throug filling or cropping)
-    size_t        currentIndex_;
+    size_t        index_;
     ScalarType const* defaultValue_; // observer_ptr
 };
 

@@ -129,9 +129,8 @@
 	<vector>
 	<type_traits>
 
-1452215961 d:\albi\c++\openautomation\lib\multidim\boxedview.h
+1452911980 d:\albi\c++\openautomation\lib\multidim\boxedview.h
 	"Basics.h"
-	<cstring>
 
 1452121512 source:d:\albi\c++\openautomation\lib\multidim\test\basics.cpp
 	<iostream>
@@ -148,7 +147,7 @@
 	<vector>
 	<type_traits>
 
-1452215658 source:d:\albi\c++\openautomation\lib\multidim\test\boxedview.cpp
+1452911755 source:d:\albi\c++\openautomation\lib\multidim\test\boxedview.cpp
 	<iostream>
 	<list>
 	<vector>
