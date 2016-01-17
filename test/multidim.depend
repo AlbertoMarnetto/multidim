@@ -120,7 +120,7 @@
 	"../FlatView.h"
 	"../BoxedView.h"
 
-1452240362 d:\albi\c++\openautomation\lib\multidim\flatview.h
+1453058380 d:\albi\c++\openautomation\lib\multidim\flatview.h
 	"Basics.h"
 
 1450746473 d:\albi\c++\openautomation\lib\multidim\containermetrics.h
@@ -129,10 +129,10 @@
 	<vector>
 	<type_traits>
 
-1452911980 d:\albi\c++\openautomation\lib\multidim\boxedview.h
+1453058442 d:\albi\c++\openautomation\lib\multidim\boxedview.h
 	"Basics.h"
 
-1452121512 source:d:\albi\c++\openautomation\lib\multidim\test\basics.cpp
+1453056424 source:d:\albi\c++\openautomation\lib\multidim\test\basics.cpp
 	<iostream>
 	<list>
 	<vector>
@@ -141,22 +141,22 @@
 	"catch.hpp"
 	"../Basics.h"
 
-1452240347 d:\albi\c++\openautomation\lib\multidim\basics.h
+1453056785 d:\albi\c++\openautomation\lib\multidim\basics.h
 	<iterator>
 	<string>
 	<vector>
 	<type_traits>
 
-1452911755 source:d:\albi\c++\openautomation\lib\multidim\test\boxedview.cpp
+1453058874 source:d:\albi\c++\openautomation\lib\multidim\test\boxedview.cpp
 	<iostream>
 	<list>
 	<vector>
 	<string>
 	<iterator>
 	"catch.hpp"
-	"../BoxedView.h"
+	"../multidim.hpp"
 
-1452121934 source:d:\albi\c++\openautomation\lib\multidim\test\flatview.cpp
+1452994064 source:d:\albi\c++\openautomation\lib\multidim\test\flatview.cpp
 	<iostream>
 	<list>
 	<vector>
@@ -164,4 +164,12 @@
 	<iterator>
 	"catch.hpp"
 	"../FlatView.h"
+
+1453060812 d:\albi\c++\openautomation\lib\multidim\multidim.hpp
+	<iterator>
+	<string>
+	<vector>
+	<type_traits>
+	<limits>
+	<algorithm>
 

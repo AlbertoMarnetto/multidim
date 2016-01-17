@@ -57,8 +57,9 @@ TEST_CASE( "Basics", "[multidim]" ) {
         CHECK((md::IsScalar<md::NoCustomScalars, decltype(vecVecBool)>::value) == false);
 
 
-#define TEST_SCALAR_TYPE(x, y) (std::is_same<md::IteratorScalarType<md::NoCustomScalars, decltype(begin(x))>::type, y>::value)
-#define TEST_SCALAR_TYPE_CUSTOM(x, y) (std::is_same<md::IteratorScalarType<md::StringsAsScalars, decltype(begin(x))>::type, y>::value)
+#define TEST_SCALAR_TYPE(x, y) (std::is_same<decltype(md::scalarType(x)), y>::value)
+#define TEST_SCALAR_TYPE_CUSTOM(x, y) (std::is_same<decltype(md::scalarType<md::StringsAsScalars>(x)), y>::value)
+//#define TEST_SCALAR_TYPE_CUSTOM(x, y) (std::is_same<md::IteratorScalarType<md::StringsAsScalars, decltype(begin(x))>::type, y>::value)
         CHECK(TEST_SCALAR_TYPE(vectorInt, int));
         CHECK(TEST_SCALAR_TYPE(cArray, int));
         CHECK(TEST_SCALAR_TYPE(refCArray, int));

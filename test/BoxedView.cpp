@@ -8,7 +8,7 @@
 
 #include "catch.hpp"
 
-#include "../BoxedView.h"
+#include "../multidim.hpp"
 
 namespace md = multidim;
 using std::vector;

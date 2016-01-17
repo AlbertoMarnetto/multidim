@@ -227,12 +227,11 @@ TEST_CASE( "FlatView", "[multidim]" ) {
     SECTION("<algorithm>") {
         // Standard algorithms
         vector<vector<int>> uriahFuller1 = {{},{1,2,3,},{4},{},{},{5,6}};
-        vector<vector<int>> uriahFuller2 = {{},{1,2,3,},{4},{},{},{5,6}};
-
         auto fv1 = md::makeFlatView(uriahFuller1);
         std::copy(begin(fv1), begin(fv1)+3, begin(fv1)+3);
         CHECK((uriahFuller1 == vector<vector<int>>{{},{1,2,3,},{1},{},{},{2,3}}) == true);
 
+        vector<vector<int>> uriahFuller2 = {{},{1,2,3,},{4},{},{},{5,6}};
         auto fv2 = md::makeFlatView(uriahFuller2);
         std::remove_if(begin(fv2), end(fv2), [](int n)->bool{return (n%2)==0;});
         CHECK((uriahFuller2[1]) == (vector<int>{1,3,5,}));
