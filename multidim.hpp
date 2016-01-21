@@ -51,7 +51,7 @@ namespace multidim {
  */
 
 /** \defgroup custom_scalars "CustomScalar" traits
- * \brief Implementations for the "CustomScalarTrait" template argument of
+ * \brief Implementations for the "ScalarPolicy" template argument of
  * the library main classes and functions.
  * Each implementation indicates which classes should be considered scalars,
  * even if they are containers.
@@ -106,14 +106,14 @@ static auto size(const Container& container) -> size_t {
 /** \brief Trivial tag class to indicate the seek direction of an iterator
  * \ingroup detail
  */
-struct Forward {};
+struct forward {};
 /** \brief Trivial tag class to indicate the seek direction of an iterator
  * \ingroup detail
  */
-struct Backward {};
+struct backward {};
 
 //***************************************************************************
-// IsRange
+// is_range
 //***************************************************************************
 /**
  * \brief Provides the member constant `value`, which is
@@ -126,9 +126,9 @@ struct Backward {};
 */
 
 template <typename T>
-struct IsRange {
+struct is_range {
     template <typename T1 = T>
-    static constexpr auto _isRange(int)
+    static constexpr auto _is_range(int)
     -> decltype(
         begin(std::declval<T1&>()),
         end(std::declval<T1&>()),
@@ -138,11 +138,11 @@ struct IsRange {
         return std::is_same<decltype(begin(std::declval<T1&>())), decltype(end(std::declval<T1&>()))>::value;
     }
 
-    static constexpr auto _isRange(long) -> decltype(bool()) {
+    static constexpr auto _is_range(long) -> decltype(bool()) {
         return false;
     }
 
-    static constexpr bool value = _isRange(0);
+    static constexpr bool value = _is_range(0);
 };
 
 //***************************************************************************
@@ -154,7 +154,7 @@ struct IsRange {
  * \ingroup detail
  * \param T (typename)
  */
-template <typename T, bool = IsRange<T>::value>
+template <typename T, bool = is_range<T>::value>
 struct IteratorType;
 
 // Only defined if T supports `begin`
@@ -182,7 +182,7 @@ struct PointsToRange {
         std::declval<typename std::iterator_traits<Iterator1>::reference_type>(),
         bool()
     ) {
-        return IsRange<Iterator1>::value;
+        return is_range<Iterator1>::value;
     }
 
     static constexpr auto _pointsToRange(long) -> decltype(bool()) {
@@ -193,7 +193,7 @@ struct PointsToRange {
 };
 
 //***************************************************************************
-// CustomScalarTrait
+// ScalarPolicy
 //***************************************************************************
 /** \brief Defines `std::string` and `std::wstring` as scalar types.
  * \ingroup custom_scalars
@@ -224,9 +224,9 @@ struct NoCustomScalars{static constexpr bool isCustomScalar = false; /*for any T
  * \param T (typename, as template parameter)
  */
 // **************************************************************************
-template <template<typename> class CustomScalarTrait = NoCustomScalars, typename T = void>
+template <template<typename> class ScalarPolicy = NoCustomScalars, typename T = void>
 struct IsScalar {
-    static constexpr bool value = !IsRange<T>::value || CustomScalarTrait<T>::isCustomScalar;
+    static constexpr bool value = !is_range<T>::value || ScalarPolicy<T>::isCustomScalar;
 };
 
 // **************************************************************************
@@ -237,29 +237,29 @@ struct IsScalar {
  * in a (possibly nested) iterator,
  * e.g. `vector<set<int>>::iterator` --> `type:int, reference = int&`
  * \ingroup detail
- * \param CustomScalarTrait (trait template)
+ * \param ScalarPolicy (trait template)
  * \param Iterator (typename)
  */
 template <
-    template<typename> class CustomScalarTrait = NoCustomScalars,
+    template<typename> class ScalarPolicy = NoCustomScalars,
     typename Iterator = void,
-    bool = IsScalar<CustomScalarTrait, typename std::iterator_traits<Iterator>::value_type>::value
+    bool = IsScalar<ScalarPolicy, typename std::iterator_traits<Iterator>::value_type>::value
 >
 struct IteratorScalarType;
 
 // Specialization for Iterator pointing to scalar
-template <template<typename> class CustomScalarTrait, typename Iterator>
-struct IteratorScalarType<CustomScalarTrait, Iterator, true> {
+template <template<typename> class ScalarPolicy, typename Iterator>
+struct IteratorScalarType<ScalarPolicy, Iterator, true> {
     using reference = typename std::iterator_traits<Iterator>::reference;
     using type = typename std::iterator_traits<Iterator>::value_type;
 };
 
 // Specialization for Iterator pointing to a not scalar: recurse to next level
-template <template<typename> class CustomScalarTrait, typename Iterator>
-struct IteratorScalarType<CustomScalarTrait, Iterator, false> {
+template <template<typename> class ScalarPolicy, typename Iterator>
+struct IteratorScalarType<ScalarPolicy, Iterator, false> {
     using MyScalarType =
         IteratorScalarType<
-            CustomScalarTrait,
+            ScalarPolicy,
             decltype(begin(
                 std::declval<typename std::iterator_traits<Iterator>::reference>()
             ))
@@ -274,39 +274,39 @@ struct IteratorScalarType<CustomScalarTrait, Iterator, false> {
 //***************************************************************************
 /** \brief Provides the `size_t` member `value` as the dimensionality of a type
  * \ingroup detail
- * \param CustomScalarTrait (trait template)
+ * \param ScalarPolicy (trait template)
  * \param T (typename)
  */
 template <
-    template<typename> class CustomScalarTrait = NoCustomScalars,
+    template<typename> class ScalarPolicy = NoCustomScalars,
     typename T = void,
-    bool = IsScalar<CustomScalarTrait, T>::value
+    bool = IsScalar<ScalarPolicy, T>::value
 >
 struct Dimensionality;
 
 // Specialization for scalar T
-template <template<typename> class CustomScalarTrait, typename T>
-struct Dimensionality<CustomScalarTrait, T, true> {
+template <template<typename> class ScalarPolicy, typename T>
+struct Dimensionality<ScalarPolicy, T, true> {
     static constexpr size_t value = 0;
 };
 
 // Specialization for non-scalar T
-template <template<typename> class CustomScalarTrait, typename T>
-struct Dimensionality<CustomScalarTrait, T, false> {
+template <template<typename> class ScalarPolicy, typename T>
+struct Dimensionality<ScalarPolicy, T, false> {
     static constexpr size_t value = 1
         + Dimensionality<
-            CustomScalarTrait,
+            ScalarPolicy,
             typename std::iterator_traits<typename IteratorType<T>::type>::reference
         >::value;
 };
 
 // Version for ranges
 template <
-    template<typename> class CustomScalarTrait = NoCustomScalars,
+    template<typename> class ScalarPolicy = NoCustomScalars,
     typename Iterator = void
 >
 struct DimensionalityRange {
-    static constexpr size_t value = 1+Dimensionality<CustomScalarTrait, typename std::iterator_traits<Iterator>::reference>::value;
+    static constexpr size_t value = 1+Dimensionality<ScalarPolicy, typename std::iterator_traits<Iterator>::reference>::value;
 };
 
 
@@ -314,22 +314,22 @@ struct DimensionalityRange {
 /** \brief Returns the dimensionality of the type of the argument
  * (or 0 if such type is a scalar)
  * \ingroup user_functions
- * \param CustomScalarTrait (trait template)
+ * \param ScalarPolicy (trait template)
  * \param argument the object whose dimensionality will be returned
  */
-template <template<typename> class CustomScalarTrait = NoCustomScalars, typename T = void>
+template <template<typename> class ScalarPolicy = NoCustomScalars, typename T = void>
 constexpr size_t dimensionality(T const& arg) {
-    return Dimensionality<CustomScalarTrait, T const&>::value;
+    return Dimensionality<ScalarPolicy, T const&>::value;
 }
 
 /** \brief Returns the dimensionality of the type of the range
  * \ingroup user_functions
- * \param CustomScalarTrait (trait template)
+ * \param ScalarPolicy (trait template)
  * \param first, last the range whose dimensionality will be returned
  */
-template <template<typename> class CustomScalarTrait = NoCustomScalars, typename Iterator = void>
+template <template<typename> class ScalarPolicy = NoCustomScalars, typename Iterator = void>
 constexpr size_t dimensionality(Iterator const& first, Iterator const& last) {
-    return DimensionalityRange<CustomScalarTrait, Iterator>::value;
+    return DimensionalityRange<ScalarPolicy, Iterator>::value;
 }
 
 // **************************************************************************
@@ -340,7 +340,7 @@ constexpr size_t dimensionality(Iterator const& first, Iterator const& last) {
  * i.e. its maximum size in all its subdimensions (or an empty vector
  * is the argument is a scalar)
  * \ingroup user_functions
- * \param CustomScalarTrait (trait template)
+ * \param ScalarPolicy (trait template)
  * \param argument the container whose bounds will be returned
  */
 
@@ -348,36 +348,36 @@ constexpr size_t dimensionality(Iterator const& first, Iterator const& last) {
  * \brief Returns a `vector<size_t>` containing the bounds of a range,
  * i.e. its maximum size in all its subdimensions
  * \ingroup user_functions
- * \param CustomScalarTrait (trait template)
+ * \param ScalarPolicy (trait template)
  * \param first, last  the range whose bounds will be returned
  * \param precomputedDistance (optional) the value of (last - first)
  */
 
 // Version for scalars
 template <
-    template<typename> class CustomScalarTrait = NoCustomScalars,
+    template<typename> class ScalarPolicy = NoCustomScalars,
     typename T = void,
-    typename std::enable_if<(true == IsScalar<CustomScalarTrait, T>::value), long>::type = 0xBEEF
+    typename std::enable_if<(true == IsScalar<ScalarPolicy, T>::value), long>::type = 0xBEEF
 >
 std::vector<size_t> bounds(T const& argument) {
     return std::vector<size_t> {};
 }
 
-// Forward-declare version for containers
+// forward-declare version for containers
 template <
-    template<typename> class CustomScalarTrait = NoCustomScalars,
+    template<typename> class ScalarPolicy = NoCustomScalars,
     typename T = void,
-    typename std::enable_if<(false == IsScalar<CustomScalarTrait, T>::value), int>::type = 0xBEEF
+    typename std::enable_if<(false == IsScalar<ScalarPolicy, T>::value), int>::type = 0xBEEF
 >
 std::vector<size_t> bounds(const T& argument);
 
 
 // Version for monolevel ranges
 template <
-    template<typename> class CustomScalarTrait = NoCustomScalars,
+    template<typename> class ScalarPolicy = NoCustomScalars,
     typename Iterator = void,
     typename std::enable_if<
-        (true == IsScalar<CustomScalarTrait, typename std::iterator_traits<Iterator>::value_type>::value),
+        (true == IsScalar<ScalarPolicy, typename std::iterator_traits<Iterator>::value_type>::value),
         long
     >::type = 0xBEEF
 >
@@ -391,15 +391,15 @@ std::vector<size_t> bounds(Iterator first, Iterator last, size_t precomputedDist
 
 // Version for multilevel ranges
 template <
-    template<typename> class CustomScalarTrait = NoCustomScalars,
+    template<typename> class ScalarPolicy = NoCustomScalars,
     typename Iterator = void,
     typename std::enable_if<
-        (false == IsScalar<CustomScalarTrait, typename std::iterator_traits<Iterator>::value_type>::value),
+        (false == IsScalar<ScalarPolicy, typename std::iterator_traits<Iterator>::value_type>::value),
         int
     >::type = 0xBEEF
 >
 std::vector<size_t> bounds(Iterator const& first, Iterator const& last, size_t precomputedDistance = NO_VALUE) {
-    constexpr auto rangeDimensionality = dimensionality<CustomScalarTrait>(first, last);
+    constexpr auto rangeDimensionality = dimensionality<ScalarPolicy>(first, last);
 
     std::vector<size_t> containerBounds(rangeDimensionality);
 
@@ -413,7 +413,7 @@ std::vector<size_t> bounds(Iterator const& first, Iterator const& last, size_t p
     // The other bounds are computed from the subcontainers info
     for (auto it = first; it != last; ++it) {
         const auto& subContainer = *it;
-        const auto& subContainerBounds = bounds<CustomScalarTrait>(subContainer);
+        const auto& subContainerBounds = bounds<ScalarPolicy>(subContainer);
 
         if (subContainerBounds.size() != rangeDimensionality-1) {
             throw std::runtime_error("bounds : encountered Container with strange dimensionality");
@@ -439,12 +439,12 @@ std::vector<size_t> bounds(Iterator const& first, Iterator const& last, size_t p
 
 // Version for containers
 template <
-    template<typename> class CustomScalarTrait,
+    template<typename> class ScalarPolicy,
     typename T,
-    typename std::enable_if<(false == IsScalar<CustomScalarTrait, T>::value), int>::type
+    typename std::enable_if<(false == IsScalar<ScalarPolicy, T>::value), int>::type
 >
 std::vector<size_t> bounds(T const& argument) {
-    return bounds<CustomScalarTrait>(begin(argument), end(argument), size(argument));
+    return bounds<ScalarPolicy>(begin(argument), end(argument), size(argument));
 }
 
 // **************************************************************************
@@ -454,7 +454,7 @@ std::vector<size_t> bounds(T const& argument) {
  * \brief Determines the number of scalar elements contained in the argument
  * (or 1 is the argument is a scalar)
  * \ingroup user_functions
- * \param CustomScalarTrait (trait template)
+ * \param ScalarPolicy (trait template)
  * \param argument the container whose number of scalar elements will be returned
  */
 
@@ -462,36 +462,36 @@ std::vector<size_t> bounds(T const& argument) {
  * \brief Determines the bounds of a range, i.e. its maximum
  * size in all its subdimensions
  * \ingroup user_functions
- * \param CustomScalarTrait (trait template)
+ * \param ScalarPolicy (trait template)
  * \param first, last the range whose number of scalar elements will be returned
  * \param precomputedDistance (optional) the value of (last - first)
  */
 
 // Version for scalars
 template <
-    template<typename> class CustomScalarTrait = NoCustomScalars,
+    template<typename> class ScalarPolicy = NoCustomScalars,
     typename T = void,
-    typename std::enable_if<(true == IsScalar<CustomScalarTrait, T>::value), long>::type = true
+    typename std::enable_if<(true == IsScalar<ScalarPolicy, T>::value), long>::type = true
 >
 constexpr size_t scalarSize(T const& argument) {
     return 1;
 }
 
-// Forward-declare version for containers
+// forward-declare version for containers
 template <
-    template<typename> class CustomScalarTrait = NoCustomScalars,
+    template<typename> class ScalarPolicy = NoCustomScalars,
     typename T = void,
-    typename std::enable_if<(false == IsScalar<CustomScalarTrait, T>::value), int>::type = 0xBEEF
+    typename std::enable_if<(false == IsScalar<ScalarPolicy, T>::value), int>::type = 0xBEEF
 >
 size_t scalarSize(const T& argument);
 
 
 // Version for monolevel range
 template <
-    template<typename> class CustomScalarTrait = NoCustomScalars,
+    template<typename> class ScalarPolicy = NoCustomScalars,
     typename Iterator = void,
     typename std::enable_if<
-        (true == IsScalar<CustomScalarTrait, typename std::iterator_traits<Iterator>::value_type>::value),
+        (true == IsScalar<ScalarPolicy, typename std::iterator_traits<Iterator>::value_type>::value),
         long
     >::type = 0xBEEF
 >
@@ -505,19 +505,18 @@ size_t scalarSize(Iterator first, Iterator last, size_t precomputedDistance = NO
 
 // Version for multilevel range
 template <
-    template<typename> class CustomScalarTrait = NoCustomScalars,
+    template<typename> class ScalarPolicy = NoCustomScalars,
     typename Iterator = void,
     typename std::enable_if<
-        (false == IsScalar<CustomScalarTrait, typename std::iterator_traits<Iterator>::value_type>::value),
+        (false == IsScalar<ScalarPolicy, typename std::iterator_traits<Iterator>::value_type>::value),
         int
     >::type = 0xBEEF
 >
 size_t scalarSize(Iterator first, Iterator last, size_t precomputedDistance = NO_VALUE) {
     size_t result = 0;
 
-    size_t rangeScalarSize = 0;
     for (auto it = first; it != last; ++it) {
-        result += scalarSize<CustomScalarTrait>(*it);
+        result += scalarSize<ScalarPolicy>(*it);
     }
 
     return result;
@@ -525,12 +524,12 @@ size_t scalarSize(Iterator first, Iterator last, size_t precomputedDistance = NO
 
 // Version for containers
 template <
-    template<typename> class CustomScalarTrait,
+    template<typename> class ScalarPolicy,
     typename T,
-    typename std::enable_if<(false == IsScalar<CustomScalarTrait, T>::value), int>::type
+    typename std::enable_if<(false == IsScalar<ScalarPolicy, T>::value), int>::type
 >
 size_t scalarSize(T const& argument) {
-    return scalarSize<CustomScalarTrait>(begin(argument), end(argument), size(argument));
+    return scalarSize<ScalarPolicy>(begin(argument), end(argument), size(argument));
 }
 
 // **************************************************************************
@@ -541,17 +540,17 @@ size_t scalarSize(T const& argument) {
  * as parameter of `decltype`. Its return type is the type of the "leaf"
  * elements of the container passed as argument
  * \ingroup user_functions
- * \param CustomScalarTrait (trait template)
+ * \param ScalarPolicy (trait template)
  * \param argument the container of which the type of "leaf" elements will be
  * determined
  */
 template <
-    template<typename> class CustomScalarTrait = NoCustomScalars,
+    template<typename> class ScalarPolicy = NoCustomScalars,
     typename T
 >
 constexpr auto scalarType(T const& argument)
     -> typename IteratorScalarType<
-        CustomScalarTrait,
+        ScalarPolicy,
         T*
        >::type;
 
@@ -560,16 +559,16 @@ constexpr auto scalarType(T const& argument)
  * as parameter of `decltype`. Its return type is the type of the "leaf"
  * elements of the range passed as argument
  * \ingroup user_functions
- * \param CustomScalarTrait (trait template)
+ * \param ScalarPolicy (trait template)
  * \param first, last the range of which the type of "leaf" elements will be
  * determined
  */
 template <
-    template<typename> class CustomScalarTrait = NoCustomScalars,
+    template<typename> class ScalarPolicy = NoCustomScalars,
     typename Iterator
 >
 constexpr auto scalarType(Iterator first, Iterator last)
-    -> typename IteratorScalarType<CustomScalarTrait,Iterator>::type;
+    -> typename IteratorScalarType<ScalarPolicy,Iterator>::type;
 
 } // namespace multidim - Basics
 
@@ -585,23 +584,23 @@ constexpr auto scalarType(Iterator first, Iterator last)
 namespace multidim {
 
 // **************************************************************************
-// Forward declaration of FlatViewIterator
+// forward declaration of FlatViewIterator
 /** \brief The iterator used in FlatView.
  *  \ingroup flat_view
  */
 template <
-    template<typename> class CustomScalarTrait,
+    template<typename> class ScalarPolicy,
     typename RawIterator,
     bool isConstIterator,
-    bool hasSubIterator = !IsScalar<CustomScalarTrait, typename std::iterator_traits<RawIterator>::value_type>::value
+    bool hasSubIterator = !IsScalar<ScalarPolicy, typename std::iterator_traits<RawIterator>::value_type>::value
 > class FlatViewIterator;
 
 // operator+
-template <template<typename> class CustomScalarTrait, typename RawIterator, bool isConstIterator>
+template <template<typename> class ScalarPolicy, typename RawIterator, bool isConstIterator>
 auto operator+(
-        typename FlatViewIterator<CustomScalarTrait, RawIterator, isConstIterator>::difference_type n,
-        const FlatViewIterator<CustomScalarTrait, RawIterator, isConstIterator>& other)
-    -> FlatViewIterator<CustomScalarTrait, RawIterator, isConstIterator>;
+        typename FlatViewIterator<ScalarPolicy, RawIterator, isConstIterator>::difference_type n,
+        const FlatViewIterator<ScalarPolicy, RawIterator, isConstIterator>& other)
+    -> FlatViewIterator<ScalarPolicy, RawIterator, isConstIterator>;
 
 // **************************************************************************
 
@@ -614,14 +613,14 @@ auto operator+(
  * the discrepancies arising from the fact that the View does not own
  * its elements.
  * In general, we tried to follow the semantics of C++17's `string_view`.
- * \param CustomScalarTrait (trait template)
+ * \param ScalarPolicy (trait template)
  * \ingroup flat_view
  */
-template <template<typename> class CustomScalarTrait, typename RawIterator>
+template <template<typename> class ScalarPolicy, typename RawIterator>
 class FlatView {
 public:
-    using iterator = FlatViewIterator<CustomScalarTrait, RawIterator, false>;
-    using const_iterator =  FlatViewIterator<CustomScalarTrait, RawIterator, true>;
+    using iterator = FlatViewIterator<ScalarPolicy, RawIterator, false>;
+    using const_iterator =  FlatViewIterator<ScalarPolicy, RawIterator, true>;
     using value_type = typename iterator::value_type;
     using reference = typename iterator::reference;
     using const_reference = typename const_iterator::reference;
@@ -704,21 +703,21 @@ private:
 //***************************************************************************
 /** \brief Factory method to build a FlatView of a container.
  * \ingroup user_functions
- * \param CustomScalarTrait (trait template)
+ * \param ScalarPolicy (trait template)
  * \param container the container on which the View will be based
  */
-template <template<typename> class CustomScalarTrait = NoCustomScalars, typename Container = void>
-auto makeFlatView(Container& container) -> FlatView<CustomScalarTrait, decltype(begin(container))>  {
-    return FlatView<CustomScalarTrait, decltype(begin(container))>{begin(container), end(container)};
+template <template<typename> class ScalarPolicy = NoCustomScalars, typename Container = void>
+auto makeFlatView(Container& container) -> FlatView<ScalarPolicy, decltype(begin(container))>  {
+    return FlatView<ScalarPolicy, decltype(begin(container))>{begin(container), end(container)};
 }
 /** \brief Factory method to build a FlatView of a range
  * \ingroup user_functions
- * \param CustomScalarTrait : (trait template)
+ * \param ScalarPolicy : (trait template)
  * \param first, last the range on which the View will be based
  */
-template <template<typename> class CustomScalarTrait = NoCustomScalars, typename Iterator = void>
-auto makeFlatView(Iterator first, Iterator last) -> FlatView<CustomScalarTrait, Iterator>  {
-    return FlatView<CustomScalarTrait, Iterator>{first, last};
+template <template<typename> class ScalarPolicy = NoCustomScalars, typename Iterator = void>
+auto makeFlatView(Iterator first, Iterator last) -> FlatView<ScalarPolicy, Iterator>  {
+    return FlatView<ScalarPolicy, Iterator>{first, last};
 }
 
 //***************************************************************************
@@ -734,13 +733,13 @@ auto makeFlatView(Iterator first, Iterator last) -> FlatView<CustomScalarTrait, 
 //     represents the element "one past the end"
 // If (begin_ == end_) then states (1) and (3) collapse, but this does not pose a problem
 
-template <template<typename> class CustomScalarTrait, typename RawIterator, bool isConstIterator>
-class FlatViewIterator<CustomScalarTrait, RawIterator, isConstIterator, true>
+template <template<typename> class ScalarPolicy, typename RawIterator, bool isConstIterator>
+class FlatViewIterator<ScalarPolicy, RawIterator, isConstIterator, true>
 {
 public:
-    using RawValueType = typename IteratorScalarType<CustomScalarTrait, RawIterator>::type;
+    using RawValueType = typename IteratorScalarType<ScalarPolicy, RawIterator>::type;
     using ConstValueType = typename std::add_const<RawValueType>::type;
-    using RawReferenceType = typename IteratorScalarType<CustomScalarTrait, RawIterator>::reference;
+    using RawReferenceType = typename IteratorScalarType<ScalarPolicy, RawIterator>::reference;
     using ConstReferenceType = typename std::add_const<RawValueType>::type;
     // [iterator.traits]
     using iterator_category = std::random_access_iterator_tag;
@@ -759,15 +758,15 @@ public:
     /* \brief Copy constructor. Note that FlatViewIterator is TriviallyCopyable */
 
     static FlatViewIterator makeBegin(RawIterator first, RawIterator last) {
-        return FlatViewIterator<CustomScalarTrait, RawIterator, isConstIterator>{first, last, Forward{}};
+        return FlatViewIterator<ScalarPolicy, RawIterator, isConstIterator>{first, last, forward{}};
     }
     static FlatViewIterator makeEnd(RawIterator first, RawIterator last) {
-        return FlatViewIterator<CustomScalarTrait, RawIterator, isConstIterator>{first, last, Backward{}};
+        return FlatViewIterator<ScalarPolicy, RawIterator, isConstIterator>{first, last, backward{}};
     }
 
     // conversion to const_iterator
     template<bool _isConstIterator = isConstIterator>
-    FlatViewIterator(FlatViewIterator<CustomScalarTrait, RawIterator, false, true> other,
+    FlatViewIterator(FlatViewIterator<ScalarPolicy, RawIterator, false, true> other,
                      typename std::enable_if<_isConstIterator,int>::type* = nullptr) :
         child_{other.child_},
         begin_{other.begin_},
@@ -814,19 +813,19 @@ public:
 
 private: // funcs
     using ChildRawIterator = typename IteratorType<typename std::iterator_traits<RawIterator>::reference>::type;
-    using ChildIterator = FlatViewIterator<CustomScalarTrait, ChildRawIterator, isConstIterator>;
+    using ChildIterator = FlatViewIterator<ScalarPolicy, ChildRawIterator, isConstIterator>;
 
     // needed for conversion to const_iterator
-    friend class FlatViewIterator<CustomScalarTrait, RawIterator, true, true>;
+    friend class FlatViewIterator<ScalarPolicy, RawIterator, true, true>;
 
-    FlatViewIterator(RawIterator first, RawIterator last, Forward)
+    FlatViewIterator(RawIterator first, RawIterator last, forward)
         : begin_{first}
         , current_{first}
         , end_{last}
     {
         increment();
     }
-    FlatViewIterator(RawIterator first, RawIterator last, Backward)
+    FlatViewIterator(RawIterator first, RawIterator last, backward)
         : begin_{first}
         , current_{last}
         , end_{last}
@@ -853,7 +852,7 @@ private: // funcs
             // just updated current_, try to build
             // a valid subiterator at this location
             if (current_ == end_) return;
-            child_ = FlatViewIterator<CustomScalarTrait, ChildRawIterator, isConstIterator>::makeBegin(begin(*current_), end(*current_));
+            child_ = FlatViewIterator<ScalarPolicy, ChildRawIterator, isConstIterator>::makeBegin(begin(*current_), end(*current_));
             if (child_.valid()) return;
             ++current_;
         }
@@ -872,7 +871,7 @@ private: // funcs
         while(1) {
             if (current_ == begin_) return;
             --current_;
-            child_ = FlatViewIterator<CustomScalarTrait, ChildRawIterator, isConstIterator>::makeEnd(begin(*current_), end(*current_));
+            child_ = FlatViewIterator<ScalarPolicy, ChildRawIterator, isConstIterator>::makeEnd(begin(*current_), end(*current_));
             --child_;
             if (child_.valid()) return;
         }
@@ -921,7 +920,9 @@ private: // funcs
             if (tmp == other) return result;
         } while (tmp.valid());
 
-        throw std::runtime_error("Attempted to compare iterators not belonging to same container");
+        throw std::runtime_error(
+            "Attempted to compare iterators not belonging to same container"
+        );
     }
 
 
@@ -934,13 +935,13 @@ private: // members
 
 // **************************************************************************
 // Specialization for RawIterator pointing to a scalar
-template <template<typename> class CustomScalarTrait, typename RawIterator, bool isConstIterator>
-class FlatViewIterator<CustomScalarTrait, RawIterator, isConstIterator, false>
+template <template<typename> class ScalarPolicy, typename RawIterator, bool isConstIterator>
+class FlatViewIterator<ScalarPolicy, RawIterator, isConstIterator, false>
 {
 public:
-    using RawValueType = typename IteratorScalarType<CustomScalarTrait, RawIterator>::type;
+    using RawValueType = typename IteratorScalarType<ScalarPolicy, RawIterator>::type;
     using ConstValueType = typename std::add_const<RawValueType>::type;
-    using RawReferenceType = typename IteratorScalarType<CustomScalarTrait, RawIterator>::reference;
+    using RawReferenceType = typename IteratorScalarType<ScalarPolicy, RawIterator>::reference;
     using ConstReferenceType = typename std::add_const<RawValueType>::type;
 
     // [iterator.traits]
@@ -960,15 +961,15 @@ public:
     /* \brief Copy constructor. Note that FlatViewIterator is TriviallyCopyable */
 
     static FlatViewIterator makeBegin(RawIterator first, RawIterator last) {
-        return FlatViewIterator<CustomScalarTrait, RawIterator, isConstIterator>{first, last, Forward{}};
+        return FlatViewIterator<ScalarPolicy, RawIterator, isConstIterator>{first, last, forward{}};
     }
     static FlatViewIterator makeEnd(RawIterator first, RawIterator last) {
-        return FlatViewIterator<CustomScalarTrait, RawIterator, isConstIterator>{first, last, Backward{}};
+        return FlatViewIterator<ScalarPolicy, RawIterator, isConstIterator>{first, last, backward{}};
     }
 
     // conversion to const_iterator
     template<bool _isConstIterator = isConstIterator>
-    FlatViewIterator(FlatViewIterator<CustomScalarTrait, RawIterator, false, false> other,
+    FlatViewIterator(FlatViewIterator<ScalarPolicy, RawIterator, false, false> other,
                      typename std::enable_if<_isConstIterator,int>::type* = nullptr) :
         valid_{other.valid_},
         begin_{other.begin_},
@@ -1016,12 +1017,12 @@ public:
 
 private: // funcs
     // needed for conversion to const_iterator
-    friend class FlatViewIterator<CustomScalarTrait, RawIterator, true, false>;
+    friend class FlatViewIterator<ScalarPolicy, RawIterator, true, false>;
 
     // **************************************************************************
     // private ctors
     // **************************************************************************
-    FlatViewIterator(RawIterator first, RawIterator last, Forward)
+    FlatViewIterator(RawIterator first, RawIterator last, forward)
         : valid_{false}
         , begin_{first}
         , current_{first}
@@ -1029,7 +1030,7 @@ private: // funcs
     {
         increment();
     }
-    FlatViewIterator(RawIterator first, RawIterator last, Backward)
+    FlatViewIterator(RawIterator first, RawIterator last, backward)
         : valid_{false}
         , begin_{first}
         , current_{last}
@@ -1092,7 +1093,9 @@ private: // funcs
             if (tmp == other) return result;
         } while (tmp.valid());
 
-        throw std::runtime_error("Attempted to compare iterators not belonging to same container");
+        throw std::runtime_error(
+            "Attempted to compare iterators not belonging to same container"
+        );
     }
 
 private: // members
@@ -1104,11 +1107,11 @@ private: // members
 
 // **************************************************************************
 
-template <template<typename> class CustomScalarTrait, typename RawIterator, bool isConstIterator>
+template <template<typename> class ScalarPolicy, typename RawIterator, bool isConstIterator>
 auto operator+(
-        typename FlatViewIterator<CustomScalarTrait, RawIterator, isConstIterator>::difference_type n,
-        const FlatViewIterator<CustomScalarTrait, RawIterator, isConstIterator>& other)
-    -> FlatViewIterator<CustomScalarTrait, RawIterator, isConstIterator>
+        typename FlatViewIterator<ScalarPolicy, RawIterator, isConstIterator>::difference_type n,
+        const FlatViewIterator<ScalarPolicy, RawIterator, isConstIterator>& other)
+    -> FlatViewIterator<ScalarPolicy, RawIterator, isConstIterator>
 {
     return other + n;
 }
@@ -1126,13 +1129,13 @@ auto operator+(
 namespace multidim {
 
 // **************************************************************************
-// Forward declarations
+// forward declarations
 /** \brief The iterator used in BoxedView. Unfortunately, it is not
  * a "proper" iterator, since it is proxied.
  *  \ingroup boxed_view
  */
 template <
-    template<typename> class CustomScalarTrait,
+    template<typename> class ScalarPolicy,
     typename RawIterator,
     bool isConstIterator,
     size_t dimensionality
@@ -1140,11 +1143,11 @@ template <
 class BoxedViewIterator;
 
 // n + iterator
-template <template<typename> class CustomScalarTrait, typename RawIterator, bool isConstIterator, size_t dimensionality>
+template <template<typename> class ScalarPolicy, typename RawIterator, bool isConstIterator, size_t dimensionality>
 auto operator+(
-        typename BoxedViewIterator<CustomScalarTrait, RawIterator, isConstIterator, dimensionality>::difference_type n,
-        const BoxedViewIterator<CustomScalarTrait, RawIterator, isConstIterator, dimensionality>& other)
-    -> BoxedViewIterator<CustomScalarTrait, RawIterator, isConstIterator, dimensionality>;
+        typename BoxedViewIterator<ScalarPolicy, RawIterator, isConstIterator, dimensionality>::difference_type n,
+        const BoxedViewIterator<ScalarPolicy, RawIterator, isConstIterator, dimensionality>& other)
+    -> BoxedViewIterator<ScalarPolicy, RawIterator, isConstIterator, dimensionality>;
 
 /** \brief Proxy class representing a reference to a (possibly defaulted)
  *  scalar value. Plays the same role as vector<bool>::reference.
@@ -1167,21 +1170,21 @@ class BoxedViewScalarProxy;
  * Other discrepancies arise from the fact that the View does not own
  * its elements.
  * In general, we tried to follow the semantics of C++17's `string_view`.
- * \param CustomScalarTrait (trait template)
+ * \param ScalarPolicy (trait template)
  * \ingroup boxed_view
  */
 template <
-    template<typename> class CustomScalarTrait,
+    template<typename> class ScalarPolicy,
     typename RawIterator,
     size_t dimensionality_
 >
 class BoxedView {
 public:
     using iterator = BoxedViewIterator<
-        CustomScalarTrait, RawIterator, false, dimensionality_
+        ScalarPolicy, RawIterator, false, dimensionality_
     >;
     using const_iterator =  BoxedViewIterator<
-        CustomScalarTrait, RawIterator, true, dimensionality_
+        ScalarPolicy, RawIterator, true, dimensionality_
     >;
     using value_type = typename iterator::value_type;
     using reference = typename iterator::reference;
@@ -1329,125 +1332,125 @@ private:
 //***************************************************************************
 /** \brief Factory method to build a BoxedView of a range
  * \ingroup user_functions
- * \param CustomScalarTrait : (trait template)
+ * \param ScalarPolicy : (trait template)
  * \param first, last the range on which the View will be based
  */
 template <
-    template<typename> class CustomScalarTrait = NoCustomScalars,
+    template<typename> class ScalarPolicy = NoCustomScalars,
     typename Iterator = void,
     typename ScalarValue = void,
     typename BoundsContainer = void
 >
 auto makeBoxedView(
     Iterator first, Iterator last,
-    ScalarValue&& defaultValue, const BoundsContainer& apparentBounds
+    ScalarValue&& defaultValue, const BoundsContainer& viewBounds
 )
     -> BoxedView<
-        CustomScalarTrait, Iterator,
-        DimensionalityRange<CustomScalarTrait, Iterator>::value
+        ScalarPolicy, Iterator,
+        DimensionalityRange<ScalarPolicy, Iterator>::value
        >
 {
     using std::begin;
-    if (begin(apparentBounds) ==  end(apparentBounds)) {
-        auto containerBounds = bounds<CustomScalarTrait>(first, last);
-        return BoxedView<CustomScalarTrait, Iterator, dimensionality(first, last)>
+    if (begin(viewBounds) ==  end(viewBounds)) {
+        auto containerBounds = bounds<ScalarPolicy>(first, last);
+        return BoxedView<ScalarPolicy, Iterator, dimensionality(first, last)>
             ( first, last,
               std::forward<ScalarValue>(defaultValue), begin(containerBounds)
              );
     }
 
     if (
-        std::distance(begin(apparentBounds), end(apparentBounds)) !=
+        std::distance(begin(viewBounds), end(viewBounds)) !=
         dimensionality(first, last)
     ) {
         throw std::runtime_error("makeBoxedView : limit list has false size");
     }
 
-    return BoxedView<CustomScalarTrait, Iterator, dimensionality(first, last)>
-        (first, last, std::forward<ScalarValue>(defaultValue), begin(apparentBounds));
+    return BoxedView<ScalarPolicy, Iterator, dimensionality(first, last)>
+        (first, last, std::forward<ScalarValue>(defaultValue), begin(viewBounds));
 }
 
 // The same, with a initializer list
 template <
-    template<typename> class CustomScalarTrait = NoCustomScalars,
+    template<typename> class ScalarPolicy = NoCustomScalars,
     typename Iterator = void,
     typename ScalarValue = void
 >
 auto makeBoxedView(
     Iterator first, Iterator last,
-    ScalarValue&& defaultValue, std::initializer_list<size_t> apparentBounds
+    ScalarValue&& defaultValue, std::initializer_list<size_t> viewBounds
 )
     -> BoxedView<
-        CustomScalarTrait, Iterator,
-        DimensionalityRange<CustomScalarTrait, Iterator>::value
+        ScalarPolicy, Iterator,
+        DimensionalityRange<ScalarPolicy, Iterator>::value
        >
 {
     using std::begin;
-    if (begin(apparentBounds) == end(apparentBounds)) {
-        auto containerBounds = bounds<CustomScalarTrait>(first, last);
-        return BoxedView<CustomScalarTrait, Iterator, dimensionality(first, last)>
+    if (begin(viewBounds) == end(viewBounds)) {
+        auto containerBounds = bounds<ScalarPolicy>(first, last);
+        return BoxedView<ScalarPolicy, Iterator, dimensionality(first, last)>
             (first, last,
              std::forward<ScalarValue>(defaultValue), begin(containerBounds)
             );
     }
 
     if (
-        std::distance(begin(apparentBounds), end(apparentBounds)) !=
+        std::distance(begin(viewBounds), end(viewBounds)) !=
         dimensionality(first, last)
     ) {
         throw std::runtime_error("makeBoxedView : limit list has false size");
 
     }
 
-    return BoxedView<CustomScalarTrait, Iterator, dimensionality(first, last)>
-        (first, last, std::forward<ScalarValue>(defaultValue), begin(apparentBounds));
+    return BoxedView<ScalarPolicy, Iterator, dimensionality(first, last)>
+        (first, last, std::forward<ScalarValue>(defaultValue), begin(viewBounds));
 }
 
 /** \brief Factory method to build a BoxedView of a container
  *  (delegates to the range.based version)
  * \ingroup user_functions
- * \param CustomScalarTrait (trait template)
+ * \param ScalarPolicy (trait template)
  * \param container the container on which the View will be based
  */
 template <
-    template<typename> class CustomScalarTrait = NoCustomScalars,
+    template<typename> class ScalarPolicy = NoCustomScalars,
     typename Container = void,
     typename ScalarValue = void,
     typename BoundsContainer = void
 >
 auto makeBoxedView(
     Container& container, ScalarValue&& defaultValue,
-    const BoundsContainer& apparentBounds
+    const BoundsContainer& viewBounds
 )
     -> BoxedView<
-            CustomScalarTrait, decltype(begin(container)),
-            Dimensionality<CustomScalarTrait, Container>::value
+            ScalarPolicy, decltype(begin(container)),
+            Dimensionality<ScalarPolicy, Container>::value
        >
 {
     return makeBoxedView(
         begin(container), end(container),
-        std::forward<ScalarValue>(defaultValue), apparentBounds
+        std::forward<ScalarValue>(defaultValue), viewBounds
     );
 }
 
 // The same, with a initializer list
 template <
-    template<typename> class CustomScalarTrait = NoCustomScalars,
+    template<typename> class ScalarPolicy = NoCustomScalars,
     typename Container = void,
     typename ScalarValue = void
 >
 auto makeBoxedView(
     Container& container, ScalarValue&& defaultValue,
-    std::initializer_list<size_t> apparentBounds
+    std::initializer_list<size_t> viewBounds
 )
     -> BoxedView<
-        CustomScalarTrait, decltype(begin(container)),
-        Dimensionality<CustomScalarTrait, Container>::value
+        ScalarPolicy, decltype(begin(container)),
+        Dimensionality<ScalarPolicy, Container>::value
        >
 {
     return makeBoxedView(
         begin(container), end(container),
-        std::forward<ScalarValue>(defaultValue), apparentBounds
+        std::forward<ScalarValue>(defaultValue), viewBounds
     );
 }
 
@@ -1498,14 +1501,14 @@ private: // members
 
 // typedefs for dimensionality_ > 1
 template <
-    template<typename> class CustomScalarTrait,
+    template<typename> class ScalarPolicy,
     typename RawIterator,
     bool isConstIterator,
     size_t dimensionality_
 >
 struct BoxedViewIteratorTraits {
     using RawScalarType =
-        typename IteratorScalarType<CustomScalarTrait, RawIterator>::type;
+        typename IteratorScalarType<ScalarPolicy, RawIterator>::type;
     using ConstScalarType = typename std::add_const<RawScalarType>::type;
     using ScalarType = typename std::conditional<
         isConstIterator, ConstScalarType, RawScalarType
@@ -1515,7 +1518,7 @@ struct BoxedViewIteratorTraits {
         typename std::iterator_traits<RawIterator>::reference
     >::type;
     using ChildIterator = BoxedViewIterator<
-        CustomScalarTrait, ChildRawIterator,
+        ScalarPolicy, ChildRawIterator,
         isConstIterator, dimensionality_ - 1
     >;
 
@@ -1527,15 +1530,15 @@ struct BoxedViewIteratorTraits {
 
 // typedefs for dimensionality_ == 1
 template <
-    template<typename> class CustomScalarTrait,
+    template<typename> class ScalarPolicy,
     typename RawIterator,
     bool isConstIterator
 >
 struct BoxedViewIteratorTraits<
-    CustomScalarTrait, RawIterator, isConstIterator, /*dimensionality_*/ 1
+    ScalarPolicy, RawIterator, isConstIterator, /*dimensionality_*/ 1
 > {
     using RawScalarType =
-        typename IteratorScalarType<CustomScalarTrait, RawIterator>::type;
+        typename IteratorScalarType<ScalarPolicy, RawIterator>::type;
     using ConstScalarType = typename std::add_const<RawScalarType>::type;
     using ScalarType = typename std::conditional<
         isConstIterator, ConstScalarType, RawScalarType
@@ -1553,20 +1556,19 @@ struct BoxedViewIteratorTraits<
 // BoxedViewIterator
 //***************************************************************************
 // Specialization for RawIterator pointing to a subcontainer
-// Precondition: apparentBounds_ is an array
+// Precondition: viewBounds_ is an array
 // having at least `dimensionality_` elements
 
 template <
-    template<typename> class CustomScalarTrait,
+    template<typename> class ScalarPolicy,
     typename RawIterator,
     bool isConstIterator,
     size_t dimensionality_
 >
 class BoxedViewIterator {
-    constexpr static const size_t nullBounds_[dimensionality_] = {0};
 public:
     using Traits = BoxedViewIteratorTraits<
-        CustomScalarTrait, RawIterator, isConstIterator, dimensionality_
+        ScalarPolicy, RawIterator, isConstIterator, dimensionality_
     >;
     using ScalarType = typename Traits::ScalarType;
 
@@ -1584,7 +1586,7 @@ public:
     // **************************************************************************
     BoxedViewIterator() :
         current_{nullptr},
-        physicalBound_{0}, apparentBounds_{nullBounds_}, index_{0},
+        physicalBound_{0}, viewBounds_{nullptr}, index_{0},
         defaultValue_{nullptr}
         {}
     /* \brief Default constructor. */
@@ -1594,30 +1596,30 @@ public:
 
     static BoxedViewIterator makeBegin(
         RawIterator first, RawIterator last,
-        ScalarType const* defaultValue, size_t const* apparentBounds)
+        ScalarType const* defaultValue, size_t const* viewBounds)
     {
         return BoxedViewIterator<
-            CustomScalarTrait, RawIterator, isConstIterator, dimensionality_
-        > {first, last, defaultValue, apparentBounds, Forward{}};
+            ScalarPolicy, RawIterator, isConstIterator, dimensionality_
+        > {first, last, defaultValue, viewBounds, forward{}};
     }
     static BoxedViewIterator makeEnd(
         RawIterator first, RawIterator last,
-        ScalarType const* defaultValue, size_t const* apparentBounds)
+        ScalarType const* defaultValue, size_t const* viewBounds)
     {
         return BoxedViewIterator<
-            CustomScalarTrait, RawIterator, isConstIterator, dimensionality_
-        >{first, last, defaultValue, apparentBounds, Backward{}};
+            ScalarPolicy, RawIterator, isConstIterator, dimensionality_
+        >{first, last, defaultValue, viewBounds, backward{}};
     }
 
     // conversion to const_iterator
     template<bool _isConstIterator = isConstIterator>
     BoxedViewIterator(
-        BoxedViewIterator<CustomScalarTrait, RawIterator, false, dimensionality_> other,
+        BoxedViewIterator<ScalarPolicy, RawIterator, false, dimensionality_> other,
         typename std::enable_if<_isConstIterator,int>::type* = nullptr
     ) :
         current_{other.current_},
         physicalBound_{other.physicalBound_},
-        apparentBounds_{other.apparentBounds_},
+        viewBounds_{other.viewBounds_},
         index_{other.index_},
         defaultValue_{other.defaultValue_}
     {}
@@ -1668,49 +1670,50 @@ public:
         return it - it.index_;
     }
     friend BoxedViewIterator end(const BoxedViewIterator& it) {
-        return it + (it.apparentBounds_[0] - it.index_);
+        if (it.viewBounds_ == nullptr) return it;
+        return it + (it.viewBounds_[0] - it.index_);
     }
 private:
     // needed for conversion to const_iterator
-    friend class BoxedViewIterator<CustomScalarTrait, RawIterator, true, true>;
+    friend class BoxedViewIterator<ScalarPolicy, RawIterator, true, true>;
 
     // **************************************************************************
     // private ctors
     // **************************************************************************
     BoxedViewIterator(
         RawIterator first, RawIterator last,
-        ScalarType const* defaultValue, size_t const* apparentBounds,
-        Forward
+        ScalarType const* defaultValue, size_t const* viewBounds,
+        forward
     ) :
         current_{first},
         physicalBound_{static_cast<size_t>(std::distance(first, last))},
-        apparentBounds_{apparentBounds},
+        viewBounds_{viewBounds},
         index_{0},
         defaultValue_{defaultValue}
     {}
 
     BoxedViewIterator(
         RawIterator first, RawIterator last,
-        ScalarType const* defaultValue, size_t const* apparentBounds,
-        Backward
+        ScalarType const* defaultValue, size_t const* viewBounds,
+        backward
     ) :
         current_{last},
         physicalBound_{static_cast<size_t>(std::distance(first, last))},
-        apparentBounds_{apparentBounds},
-        index_{apparentBounds[0]},
+        viewBounds_{viewBounds},
+        index_{viewBounds[0]},
         defaultValue_{defaultValue}
     {
-        if (apparentBounds[0] < physicalBound_) {
+        if (viewBounds[0] < physicalBound_) {
             // in this case, current_ points to the wrong place
             // (i.e. to the physical end of the container
             // insted of the end of the view)
             // and must be corrected
             size_t currentIndex_ = physicalBound_;
-            while (currentIndex_ > apparentBounds[0]) {
+            while (currentIndex_ > viewBounds[0]) {
                 --current_;
                 --currentIndex_;
             }
-            // TODO: overload for random access oterators
+            // TODO: overload for random access iterators
         }
     }
 
@@ -1723,7 +1726,7 @@ private:
     void increment() {
         // We were not requested to perform this check, but given the nature
         // of this iterator, seems appropriate
-        if (index_ == apparentBounds_[0])
+        if (viewBounds_ == nullptr || index_ == viewBounds_[0])
             throw std::runtime_error("BoxedViewIterator: access out of bounds");
 
         if (index_ < physicalBound_) ++current_;
@@ -1733,7 +1736,7 @@ private:
     void decrement() {
         // We would are not requested to perform this check, but given the nature
         // of this iterator, seems appropriate
-        if (index_ == ONE_BEFORE_THE_FIRST)
+        if (viewBounds_ == nullptr || index_ == ONE_BEFORE_THE_FIRST)
             throw std::runtime_error("BoxedViewIterator: access out of bounds");
 
         if (index_ > 0 && index_ <= physicalBound_) --current_;
@@ -1742,24 +1745,15 @@ private:
         // it will assume value ONE_BEFORE_THE_FIRST
     }
 
-    // **************************************************************************
-    // advance - Version if the underlying raw iterator
-    // supports random access
-    template<bool rawIteratorIsRandomAccess =
-        std::is_same<
-            typename std::iterator_traits<RawIterator>::iterator_category,
-            std::random_access_iterator_tag
-        >::value
-    >
-    auto advance(difference_type n)
-        -> typename std::enable_if<rawIteratorIsRandomAccess, void>::type
-    {
+    void advance(difference_type n) {
         // We would not be requested to perform this check, but given the nature
         // of this iterator, seems appropriate
         if (
              (
+                viewBounds_ == nullptr
+             ) || (
                 static_cast<difference_type>(index_) + n >
-                    static_cast<difference_type>(apparentBounds_[0])
+                    static_cast<difference_type>(viewBounds_[0])
              ) || (
                 static_cast<difference_type>(index_) + n < -1
              )
@@ -1768,33 +1762,31 @@ private:
         }
 
         if (index_ + n > physicalBound_) { // over the upper bound
-            current_ += (physicalBound_ - index_);
+            std::advance(current_, physicalBound_ - index_);
         } else if (index_ + n < 0) {  // under to lower bound (==0)
-            current_ -= index_;
+            std::advance(current_, -index_);
         } else {
-            current_ += n;
+            std::advance(current_, n);
         }
 
         index_ += n;
     }
 
-    // advance - Version if the underlying raw iterator
-    // does not support random access
+    // **************************************************************************
+    // distance_to - Version if the underlying raw iterator
+    // supports random access (we can use std::distance in this case)
     template<bool rawIteratorIsRandomAccess =
         std::is_same<
             typename std::iterator_traits<RawIterator>::iterator_category,
             std::random_access_iterator_tag
         >::value
     >
-    auto advance(difference_type n)
-        -> typename std::enable_if<false == rawIteratorIsRandomAccess, void>::type {
-        // Error checking is delegated to increment() and decrement()
-        if (n > 0) for (difference_type i = 0; i < n; ++i) ++(*this);
-        if (n < 0) for (difference_type i = 0; i > n; --i) --(*this);
-    }
-
-    // **************************************************************************
-    difference_type distance_to(const BoxedViewIterator& other) const {
+    auto distance_to(const BoxedViewIterator& other) const
+        -> typename std::enable_if<
+               true == rawIteratorIsRandomAccess,
+               difference_type
+           >::type
+    {
         return
             std::distance(this->current_, other.current_) -
             (
@@ -1807,6 +1799,48 @@ private:
             );
     }
 
+    // distance_to - Version if the underlying raw iterator
+    // does not support random access: we cannot but crawl in both directions,
+    // till we reach the other iterator
+    template<bool rawIteratorIsRandomAccess =
+        std::is_same<
+            typename std::iterator_traits<RawIterator>::iterator_category,
+            std::random_access_iterator_tag
+        >::value
+    >
+    auto distance_to(const BoxedViewIterator& other) const
+        -> typename std::enable_if<
+               false == rawIteratorIsRandomAccess,
+               difference_type
+           >::type
+    {
+        if (*this == other) return 0;
+
+        difference_type distance;
+
+        // forward crawl
+        distance = 0;
+        auto duplicate = *this;
+        while (duplicate.index_ < duplicate.viewBounds_[0]) {
+            ++duplicate;
+            ++distance;
+            if (duplicate == other) return distance;
+        }
+
+        // backward crawl
+        distance = 0;
+        duplicate = *this;
+        while (duplicate.index_ > 0) {
+            --duplicate;
+            --distance;
+            if (duplicate == other) return distance;
+        }
+
+        throw std::runtime_error(
+            "Attempted to compare iterators not belonging to same container"
+        );
+    }
+
     // **************************************************************************
     // dereference - Version for dimensionality_ > 1
     // returns a BoxedViewIterator to the subcontainer
@@ -1815,22 +1849,23 @@ private:
         -> typename std::enable_if<true == hasSubRange, reference>::type
     {
         if (
-                (index_ == ONE_BEFORE_THE_FIRST)
-             || (index_ == apparentBounds_[0])
+                (viewBounds_ == nullptr)
+             || (index_ == ONE_BEFORE_THE_FIRST)
+             || (index_ == viewBounds_[0])
         ) {
             throw std::runtime_error("BoxedViewIterator: access out of bounds");
         }
         if (index_ < physicalBound_) {
             return reference::makeBegin(
                 begin(*current_), end(*current_),
-                defaultValue_, apparentBounds_ + 1
+                defaultValue_, viewBounds_ + 1
                     // will shift the bound list forward
             );
         } else {
             using ChildRawIterator = typename Traits::ChildRawIterator;
             return reference::makeBegin(
                 ChildRawIterator{}, ChildRawIterator{},
-                defaultValue_, apparentBounds_ + 1
+                defaultValue_, viewBounds_ + 1
                     // will shift the bound list forward
             );
         }
@@ -1843,8 +1878,9 @@ private:
         -> typename std::enable_if<false == hasSubRange, reference>::type
     {
         if (
-                (index_ == ONE_BEFORE_THE_FIRST)
-             || (index_ == apparentBounds_[0])
+                (viewBounds_ == nullptr)
+             || (index_ == ONE_BEFORE_THE_FIRST)
+             || (index_ == viewBounds_[0])
         ) {
             throw std::runtime_error("BoxedViewIterator: access out of bounds");
         }
@@ -1856,10 +1892,13 @@ private:
     }
 
     bool equal(const BoxedViewIterator& other) const {
+        if (viewBounds_ == nullptr && other.viewBounds_ == nullptr) return true;
+        if (viewBounds_ == nullptr || other.viewBounds_ == nullptr) return false;
+
         return (current_ == other.current_)
             && (physicalBound_ == other.physicalBound_)
-            && (std::equal(apparentBounds_, apparentBounds_+dimensionality_,
-                    other.apparentBounds_)
+            && (std::equal(viewBounds_, viewBounds_+dimensionality_,
+                    other.viewBounds_)
                 )
             && (index_ == other.index_)
             && (*defaultValue_ == *other.defaultValue_);
@@ -1870,7 +1909,7 @@ private: // members
     RawIterator   current_;
     size_t        physicalBound_;
         // size of the underlying container
-    size_t const* apparentBounds_;
+    size_t const* viewBounds_;
         // size the user of the class will see (throug filling or cropping)
     size_t        index_;
     ScalarType const* defaultValue_; // observer_ptr
@@ -1880,22 +1919,22 @@ private: // members
 // **************************************************************************
 
 template <
-    template<typename> class CustomScalarTrait,
+    template<typename> class ScalarPolicy,
     typename RawIterator,
     bool isConstIterator,
     size_t dimensionality
 >
 auto operator+(
         typename BoxedViewIterator<
-            CustomScalarTrait, RawIterator,
+            ScalarPolicy, RawIterator,
             isConstIterator, dimensionality
         >::difference_type n,
         const BoxedViewIterator<
-            CustomScalarTrait, RawIterator,
+            ScalarPolicy, RawIterator,
             isConstIterator, dimensionality
         >& other
 )
-    -> BoxedViewIterator<CustomScalarTrait, RawIterator, isConstIterator, dimensionality>
+    -> BoxedViewIterator<ScalarPolicy, RawIterator, isConstIterator, dimensionality>
 {
     return other + n;
 }

@@ -4,6 +4,8 @@ doc/
 test/bin
 test/doxygen
 test/obj
+examples/bin
+examples/obj
 
 # Compiled Object files
 *.slo

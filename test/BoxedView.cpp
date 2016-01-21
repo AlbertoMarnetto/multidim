@@ -35,7 +35,7 @@ struct NotComparable {public: int a, b; bool operator ==(const NotComparable&)co
 
 TEST_CASE( "BoxedView", "[multidim]" ) {
     SECTION("Iteration 1") {
-        // Iterator operators
+        // Simple container, random access iterator
         const vector<int> simple = {1,2,3,4,5,6};
 
         auto bv = md::makeBoxedView(simple, 0, {});
@@ -78,6 +78,50 @@ TEST_CASE( "BoxedView", "[multidim]" ) {
         decltype(bv)::const_iterator converted = bv.begin();
     }
     SECTION("Iteration 2") {
+        // Simple container, bidirectional iterator
+        const list<int> simple = {1,2,3,4,5,6};
+
+        auto bv = md::makeBoxedView(simple, 0, {});
+        auto it1 = bv.begin();
+
+        CHECK(*(it1) == 1);
+        ++it1;
+        CHECK(*(it1) == 2);
+        --it1;
+        CHECK(*(it1) == 1);
+
+        CHECK(it1[1] == 2);
+
+        auto it2 = it1++;
+        CHECK(*(it1) == 2);
+        CHECK(*(it2) == 1);
+        CHECK(it2 != it1);
+        CHECK((it2 == it1) == false);
+
+        auto it3 = it1--;
+        CHECK(*(it1) == 1);
+        CHECK(*(it3) == 2);
+
+        CHECK(it3 == (it1 + 1));
+        CHECK(it3 == (1 + it1));
+        CHECK(it1 == (it3 - 1));
+        CHECK((it3 - it1) == 1);
+        CHECK((it1 - it3) == -1);
+
+        it1 = bv.begin();
+        auto it0 = it1 - 1;
+        it2 = bv.end();
+        it3 = it2 - 1;
+        CHECK(it0 != it1);
+        CHECK(it0 != it2);
+        CHECK(it2 != it3);
+
+        CHECK(std::distance(it1, it2) == 6);
+
+        decltype(bv)::const_iterator converted = bv.begin();
+    }
+    SECTION("Iteration 3") {
+        // Nested container
         const vector<vector<int>> uriahFuller = {{},{1,2,3,},{4},{},{},{5,6}};
 
         auto bv = md::makeBoxedView(uriahFuller, 0, {});
