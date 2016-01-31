@@ -1,6 +1,6 @@
 # The `multidim` library
 
-`multidim` is a header-only C++11 library, helping you to deal with nested containers of arbitrary dimensionality. Here are the functions it offers:
+`multidim` is a header-only C++11 library, helping to deal with nested containers of arbitrary dimensionality. Here are the functions it offers:
 
   - `dimensionality`: returns the nesting level of a container (e.g. a container of containers of containers has a dimensionality of 3).
   - `bounds`: returns the bounds of a nested container, i.e. its maximum sizes in all its subdimensions
@@ -155,7 +155,7 @@ int main() {
 ```
 
 ### Version
-0.9.0
+0.9.1
 
 
 ### Installation

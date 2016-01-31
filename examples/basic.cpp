@@ -10,7 +10,7 @@ using std::vector;
 int main() {
     // For this example, a vector will be used,
     // but any standard-conforming container allowing mutation
-    // could be exployed in alternative
+    // could be employed in alternative
 
     auto test = vector<vector<int>>{{},{1,2,3,},{4},{}};
 

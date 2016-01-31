@@ -106,14 +106,14 @@ static auto size(const Container& container) -> size_t {
 /** \brief Trivial tag class to indicate the seek direction of an iterator
  * \ingroup detail
  */
-struct forward {};
+struct Forward {};
 /** \brief Trivial tag class to indicate the seek direction of an iterator
  * \ingroup detail
  */
-struct backward {};
+struct Backward {};
 
 //***************************************************************************
-// is_range
+// IsRange
 //***************************************************************************
 /**
  * \brief Provides the member constant `value`, which is
@@ -126,9 +126,9 @@ struct backward {};
 */
 
 template <typename T>
-struct is_range {
+struct IsRange {
     template <typename T1 = T>
-    static constexpr auto _is_range(int)
+    static constexpr auto isRange(int)
     -> decltype(
         begin(std::declval<T1&>()),
         end(std::declval<T1&>()),
@@ -138,11 +138,11 @@ struct is_range {
         return std::is_same<decltype(begin(std::declval<T1&>())), decltype(end(std::declval<T1&>()))>::value;
     }
 
-    static constexpr auto _is_range(long) -> decltype(bool()) {
+    static constexpr auto isRange(long) -> decltype(bool()) {
         return false;
     }
 
-    static constexpr bool value = _is_range(0);
+    static constexpr bool value = isRange(0);
 };
 
 //***************************************************************************
@@ -154,7 +154,7 @@ struct is_range {
  * \ingroup detail
  * \param T (typename)
  */
-template <typename T, bool = is_range<T>::value>
+template <typename T, bool = IsRange<T>::value>
 struct IteratorType;
 
 // Only defined if T supports `begin`
@@ -182,7 +182,7 @@ struct PointsToRange {
         std::declval<typename std::iterator_traits<Iterator1>::reference_type>(),
         bool()
     ) {
-        return is_range<Iterator1>::value;
+        return IsRange<Iterator1>::value;
     }
 
     static constexpr auto _pointsToRange(long) -> decltype(bool()) {
@@ -226,7 +226,7 @@ struct NoCustomScalars{static constexpr bool isCustomScalar = false; /*for any T
 // **************************************************************************
 template <template<typename> class ScalarPolicy = NoCustomScalars, typename T = void>
 struct IsScalar {
-    static constexpr bool value = !is_range<T>::value || ScalarPolicy<T>::isCustomScalar;
+    static constexpr bool value = !IsRange<T>::value || ScalarPolicy<T>::isCustomScalar;
 };
 
 // **************************************************************************
@@ -758,10 +758,10 @@ public:
     /* \brief Copy constructor. Note that FlatViewIterator is TriviallyCopyable */
 
     static FlatViewIterator makeBegin(RawIterator first, RawIterator last) {
-        return FlatViewIterator<ScalarPolicy, RawIterator, isConstIterator>{first, last, forward{}};
+        return FlatViewIterator<ScalarPolicy, RawIterator, isConstIterator>{first, last, Forward{}};
     }
     static FlatViewIterator makeEnd(RawIterator first, RawIterator last) {
-        return FlatViewIterator<ScalarPolicy, RawIterator, isConstIterator>{first, last, backward{}};
+        return FlatViewIterator<ScalarPolicy, RawIterator, isConstIterator>{first, last, Backward{}};
     }
 
     // conversion to const_iterator
@@ -818,14 +818,14 @@ private: // funcs
     // needed for conversion to const_iterator
     friend class FlatViewIterator<ScalarPolicy, RawIterator, true, true>;
 
-    FlatViewIterator(RawIterator first, RawIterator last, forward)
+    FlatViewIterator(RawIterator first, RawIterator last, Forward)
         : begin_{first}
         , current_{first}
         , end_{last}
     {
         increment();
     }
-    FlatViewIterator(RawIterator first, RawIterator last, backward)
+    FlatViewIterator(RawIterator first, RawIterator last, Backward)
         : begin_{first}
         , current_{last}
         , end_{last}
@@ -961,10 +961,10 @@ public:
     /* \brief Copy constructor. Note that FlatViewIterator is TriviallyCopyable */
 
     static FlatViewIterator makeBegin(RawIterator first, RawIterator last) {
-        return FlatViewIterator<ScalarPolicy, RawIterator, isConstIterator>{first, last, forward{}};
+        return FlatViewIterator<ScalarPolicy, RawIterator, isConstIterator>{first, last, Forward{}};
     }
     static FlatViewIterator makeEnd(RawIterator first, RawIterator last) {
-        return FlatViewIterator<ScalarPolicy, RawIterator, isConstIterator>{first, last, backward{}};
+        return FlatViewIterator<ScalarPolicy, RawIterator, isConstIterator>{first, last, Backward{}};
     }
 
     // conversion to const_iterator
@@ -1022,7 +1022,7 @@ private: // funcs
     // **************************************************************************
     // private ctors
     // **************************************************************************
-    FlatViewIterator(RawIterator first, RawIterator last, forward)
+    FlatViewIterator(RawIterator first, RawIterator last, Forward)
         : valid_{false}
         , begin_{first}
         , current_{first}
@@ -1030,7 +1030,7 @@ private: // funcs
     {
         increment();
     }
-    FlatViewIterator(RawIterator first, RawIterator last, backward)
+    FlatViewIterator(RawIterator first, RawIterator last, Backward)
         : valid_{false}
         , begin_{first}
         , current_{last}
@@ -1600,7 +1600,7 @@ public:
     {
         return BoxedViewIterator<
             ScalarPolicy, RawIterator, isConstIterator, dimensionality_
-        > {first, last, defaultValue, viewBounds, forward{}};
+        > {first, last, defaultValue, viewBounds, Forward{}};
     }
     static BoxedViewIterator makeEnd(
         RawIterator first, RawIterator last,
@@ -1608,7 +1608,7 @@ public:
     {
         return BoxedViewIterator<
             ScalarPolicy, RawIterator, isConstIterator, dimensionality_
-        >{first, last, defaultValue, viewBounds, backward{}};
+        >{first, last, defaultValue, viewBounds, Backward{}};
     }
 
     // conversion to const_iterator
@@ -1683,7 +1683,7 @@ private:
     BoxedViewIterator(
         RawIterator first, RawIterator last,
         ScalarType const* defaultValue, size_t const* viewBounds,
-        forward
+        Forward
     ) :
         current_{first},
         physicalBound_{static_cast<size_t>(std::distance(first, last))},
@@ -1695,7 +1695,7 @@ private:
     BoxedViewIterator(
         RawIterator first, RawIterator last,
         ScalarType const* defaultValue, size_t const* viewBounds,
-        backward
+        Backward
     ) :
         current_{last},
         physicalBound_{static_cast<size_t>(std::distance(first, last))},
